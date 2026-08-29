@@ -1,16 +1,16 @@
-const mongoose = require("mongoose");
+﻿const mongoose = require("mongoose");
 
 const accessTokenSchema = new mongoose.Schema({
   token: {
     type: String,
     required: true,
     unique: true,
-    uppercase: true,
     trim: true
+    // Store exactly as entered — e.g. "123456"
   },
   label: {
     type: String,
-    default: ""          // e.g. "John's PC" � just a friendly name
+    default: ""   // e.g. "Customer - John"
   },
   status: {
     type: String,

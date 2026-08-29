@@ -253,56 +253,37 @@ app.use('/api/auth', require('./routes/auth'));
 app.use('/api/devices', require('./routes/devices'));
 
 // ─── TOKEN VERIFICATION (Extension Login) ─────────────────────────────────────
-// POST /api/auth/verify-token  { token: "EMAIL:PASSWORD" or just a passcode }
-// Checks the user exists in the existing Users DB and is active
+// POST /api/auth/verify-token  { token: "123456" }
+// Checks if the 6-digit token exists and is approved in AccessToken collection
 app.post('/api/auth/verify-token', async (req, res) => {
   try {
-    const { token, email, password } = req.body;
+    const { token } = req.body;
 
-    // Support both formats:
-    // 1. { email: "x@x.com", password: "pass" }  ← full login
-    // 2. { token: "x@x.com:pass" }                ← colon-separated in one field
-
-    let userEmail = email;
-    let userPassword = password;
-
-    if (!userEmail && token && token.includes(':')) {
-      const parts = token.split(':');
-      userEmail = parts[0].trim();
-      userPassword = parts.slice(1).join(':').trim(); // handle passwords with colons
+    if (!token || token.trim() === '') {
+      return res.status(400).json({ success: false, error: 'Token is required.' });
     }
 
-    if (!userEmail || !userPassword) {
-      return res.status(400).json({ success: false, error: 'Email and password are required' });
-    }
-
-    // If MongoDB is not connected, allow by default
+    // If MongoDB not connected — block all (no bypass)
     if (mongoose.connection.readyState !== 1) {
-      console.warn('[verify-token] MongoDB not connected — allowing by default');
-      return res.json({ success: true, plan: 'free', name: 'User' });
+      return res.status(503).json({ success: false, error: 'Server database not ready. Try again later.' });
     }
 
-    const User = require('./models/User');
-    const user = await User.findOne({ email: userEmail.toLowerCase().trim() });
+    const AccessToken = require('./models/AccessToken');
+    const record = await AccessToken.findOne({ token: token.trim() });
 
-    if (!user) {
-      return res.status(403).json({ success: false, error: 'No account found with this email.' });
+    if (!record) {
+      return res.status(403).json({ success: false, error: 'Invalid token. Contact admin.' });
     }
-    if (!user.isActive) {
-      return res.status(403).json({ success: false, error: 'Your account is deactivated. Contact admin.' });
-    }
-
-    const isValid = await user.comparePassword(userPassword);
-    if (!isValid) {
-      return res.status(403).json({ success: false, error: 'Incorrect password.' });
+    if (record.status === 'revoked') {
+      return res.status(403).json({ success: false, error: 'Token has been revoked. Contact admin.' });
     }
 
-    console.log(`[verify-token] ✅ Login approved: ${userEmail} (plan: ${user.plan})`);
-    res.json({ success: true, name: user.name || userEmail, plan: user.plan || 'free' });
+    console.log(`[verify-token] ✅ Approved: ${token} — ${record.label || ''}`);
+    res.json({ success: true, label: record.label || '' });
 
   } catch (err) {
     console.error('[verify-token] ❌ Error:', err.message);
-    res.status(500).json({ success: false, error: 'Server error' });
+    res.status(500).json({ success: false, error: 'Server error. Try again.' });
   }
 });
 
