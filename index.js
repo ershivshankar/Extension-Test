@@ -252,6 +252,90 @@ function relayToMobile(fromSocket, event, data) {
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/devices', require('./routes/devices'));
 
+// ─── TOKEN VERIFICATION (Extension Login) ─────────────────────────────────────
+// POST /api/auth/verify-token  { token: "ABC123" }
+// Returns { success: true } if token exists and is approved in DB
+app.post('/api/auth/verify-token', async (req, res) => {
+  try {
+    const { token } = req.body;
+    if (!token) return res.status(400).json({ success: false, error: 'Token is required' });
+
+    // If MongoDB is not connected, allow all tokens (fallback for no-DB setup)
+    if (mongoose.connection.readyState !== 1) {
+      console.warn('[verify-token] MongoDB not connected — allowing token by default');
+      return res.json({ success: true, plan: 'free', label: 'Default' });
+    }
+
+    const AccessToken = require('./models/AccessToken');
+    const record = await AccessToken.findOne({ token: token.toUpperCase().trim() });
+
+    if (!record) {
+      return res.status(403).json({ success: false, error: 'Token not found. Contact admin.' });
+    }
+    if (record.status === 'revoked') {
+      return res.status(403).json({ success: false, error: 'Token has been revoked. Contact admin.' });
+    }
+
+    console.log(`[verify-token] ✅ Token approved: ${token} (${record.label || 'no label'})`);
+    res.json({ success: true, label: record.label || '', plan: 'approved' });
+  } catch (err) {
+    console.error('[verify-token] ❌ Error:', err.message);
+    res.status(500).json({ success: false, error: 'Server error' });
+  }
+});
+
+// ─── ADMIN: Manage Access Tokens ──────────────────────────────────────────────
+const ADMIN_SECRET = process.env.ADMIN_SECRET || 'admin123';
+
+// GET /api/admin/tokens?secret=admin123  — list all tokens
+app.get('/api/admin/tokens', async (req, res) => {
+  if (req.query.secret !== ADMIN_SECRET) return res.status(401).json({ error: 'Unauthorized' });
+  try {
+    if (mongoose.connection.readyState !== 1) return res.status(503).json({ error: 'DB not connected' });
+    const AccessToken = require('./models/AccessToken');
+    const tokens = await AccessToken.find().sort({ createdAt: -1 });
+    res.json({ success: true, tokens });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/admin/tokens  — create a new approved token
+// Body: { secret: "admin123", token: "MYTOKEN", label: "John PC" }
+app.post('/api/admin/tokens', async (req, res) => {
+  const { secret, token, label } = req.body;
+  if (secret !== ADMIN_SECRET) return res.status(401).json({ error: 'Unauthorized' });
+  try {
+    if (mongoose.connection.readyState !== 1) return res.status(503).json({ error: 'DB not connected' });
+    const AccessToken = require('./models/AccessToken');
+    const existing = await AccessToken.findOne({ token: token.toUpperCase().trim() });
+    if (existing) return res.status(409).json({ error: 'Token already exists' });
+    const newToken = await AccessToken.create({ token: token.toUpperCase().trim(), label: label || '', status: 'approved' });
+    console.log(`[admin] ✅ Token created: ${newToken.token} (${label})`);
+    res.json({ success: true, token: newToken });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/admin/tokens/:token  — revoke a token
+// Query: ?secret=admin123
+app.delete('/api/admin/tokens/:token', async (req, res) => {
+  if (req.query.secret !== ADMIN_SECRET) return res.status(401).json({ error: 'Unauthorized' });
+  try {
+    if (mongoose.connection.readyState !== 1) return res.status(503).json({ error: 'DB not connected' });
+    const AccessToken = require('./models/AccessToken');
+    await AccessToken.findOneAndUpdate(
+      { token: req.params.token.toUpperCase() },
+      { status: 'revoked' }
+    );
+    console.log(`[admin] 🚫 Token revoked: ${req.params.token}`);
+    res.json({ success: true, message: 'Token revoked' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // /api/user/status — alias to /api/auth/status
 app.get('/api/user/status', async (req, res) => {
   try {
