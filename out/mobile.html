@@ -965,13 +965,13 @@
             }
         }
 
-        // NORMAL: send full text to PC clipboard then Ctrl+V
+        // NORMAL: directly type the text on PC via SendInput — no clipboard used
         function doNormalPaste() {
             const text = document.getElementById('paste-normal-input').value;
             if (!text) { alert('Nothing to paste. Type or paste text into the box first.'); return; }
             if (!socket || !socket.connected) { alert('Not connected to PC.'); return; }
-            emit('command:clipboard-set', { text: text, paste: false });
-            setTimeout(() => { emit('command:key', { key: 'paste' }); }, 300);
+            // Directly types via Windows SendInput API — PC clipboard is NOT touched
+            emit('command:type', { text: text });
             const btn = document.querySelector('#paste-normal-panel button');
             const orig = btn.innerHTML;
             btn.innerHTML = '✅ SENT!';
