@@ -740,10 +740,10 @@
 
         // --- REALTIME TYPING & AUTO TYPER ---
         let lastLength = 0;
-        let atLineStart = false;  // Strip leading whitespace on next input
-        let enterKeyPending = false;  // keydown already sent Enter — don't send again in input
+        let enterKeyPending = false;
         const visibleInput = document.getElementById('clip-input');
 
+        // Paste into realtime box → use clipboard for exact formatting
         visibleInput.addEventListener('paste', (e) => {
             const pastedText = e.clipboardData ? e.clipboardData.getData('text') : '';
             if (pastedText && (pastedText.includes('\n') || pastedText.includes('\t'))) {
@@ -758,32 +758,24 @@
             const currentLen = currentVal.length;
 
             if (currentLen > lastLength) {
-                let addedText = currentVal.substring(lastLength);
+                const addedText = currentVal.substring(lastLength);
 
                 if (addedText.includes('\n')) {
+                    // Split on newlines — strip ALL leading whitespace from every line
+                    // because the code editor (Monaco, etc.) auto-indents after Enter
                     const lines = addedText.split('\n');
                     lines.forEach((line, idx) => {
-                        // Strip leading whitespace on any line that follows an Enter,
-                        // because the code editor already auto-indented the cursor there
-                        const shouldStrip = (idx === 0 && atLineStart) || idx > 0;
-                        const content = shouldStrip ? line.replace(/^[ \t]+/, '') : line;
+                        const content = line.replace(/^[ \t]+/, ''); // strip leading spaces/tabs
                         if (content) emit('command:type', { text: content });
-
                         if (idx < lines.length - 1) {
-                            // Only send Enter if keydown didn't already send it for this newline
+                            // Don't send Enter twice if keydown already sent it
                             if (!enterKeyPending || idx > 0) {
                                 emit('command:key', { key: 'enter' });
                             }
                             enterKeyPending = false;
-                            atLineStart = true; // Keep true — next event strips whitespace
                         }
                     });
-                    // Do NOT reset atLineStart here — next input event must also strip
                 } else {
-                    if (atLineStart) {
-                        addedText = addedText.replace(/^[ \t]+/, '');
-                        if (addedText) atLineStart = false; // Got real content, stop stripping
-                    }
                     if (addedText) emit('command:type', { text: addedText });
                 }
             } else if (currentLen < lastLength) {
@@ -791,7 +783,6 @@
                 for (let i = 0; i < diff; i++) {
                     emit('command:key', { key: 'backspace' });
                 }
-                atLineStart = false;
                 enterKeyPending = false;
             }
             lastLength = currentLen;
@@ -799,8 +790,7 @@
 
         visibleInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
-                atLineStart = true;
-                enterKeyPending = true; // Flag: input handler must NOT send another Enter
+                enterKeyPending = true; // input handler must not send another Enter
                 emit('command:key', { key: 'enter' });
             }
         });
@@ -808,7 +798,6 @@
         function clearTypeBox() {
             visibleInput.value = '';
             lastLength = 0;
-            atLineStart = false;
             enterKeyPending = false;
         }
 

