@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RemoteLink — Subscription Plans</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Inter', sans-serif; background: #050508; min-height: 100vh; color: white; }
+        .glass { background: #11111b; border: 1px solid rgba(255,255,255,0.08); }
+        input:focus, textarea:focus { outline: none; border-color: #3b82f6 !important; box-shadow: 0 0 0 3px rgba(59,130,246,0.15); }
+        .btn-primary { background: linear-gradient(135deg, #3b82f6, #8b5cf6); transition: all 0.2s; }
+        .btn-primary:hover { filter: brightness(1.15); transform: translateY(-1px); }
+        .btn-premium { background: linear-gradient(135deg, #f59e0b, #d97706); transition: all 0.2s; }
+        .btn-premium:hover { filter: brightness(1.15); transform: translateY(-1px); }
+    </style>
+</head>
+<body>
+    <!-- Ambient Background -->
+    <div style="position:fixed;inset:0;z-index:0;pointer-events:none;">
+        <div style="position:absolute;top:-5%;left:-5%;width:45%;height:45%;background:radial-gradient(circle,rgba(59,130,246,0.12),transparent 70%);border-radius:50%;"></div>
+        <div style="position:absolute;bottom:-5%;right:-5%;width:45%;height:45%;background:radial-gradient(circle,rgba(139,92,246,0.12),transparent 70%);border-radius:50%;"></div>
+    </div>
+
+    <div style="position:relative;z-index:10;min-height:100vh;display:flex;flex-direction:column;padding:24px;">
+        
+        <!-- Nav -->
+        <nav class="max-w-6xl mx-auto w-full flex items-center justify-between py-4 mb-10 border-b border-white/5">
+            <a href="/dashboard.html" class="flex items-center gap-2 text-white font-bold hover:opacity-80 transition-all">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+                <span>Back to Dashboard</span>
+            </a>
+            <span class="text-xs text-gray-500 font-mono">Developed by Shiv Shankar</span>
+        </nav>
+
+        <div class="max-w-5xl mx-auto w-full flex-1 flex flex-col items-center justify-center">
+            
+            <div class="text-center mb-10">
+                <h1 class="text-3xl md:text-4xl font-extrabold text-white tracking-tight mb-3">Choose Your RemoteLink Plan</h1>
+                <p class="text-sm md:text-base text-gray-400 max-w-xl mx-auto">Get unlimited session times, faster control speeds, and premium support by upgrading today.</p>
+            </div>
+
+            <!-- Grid of Plans -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8 w-full max-w-4xl mb-12">
+                
+                <!-- Free Plan Card -->
+                <div class="glass rounded-3xl p-8 flex flex-col border border-white/5 relative overflow-hidden">
+                    <div class="mb-6">
+                        <span class="text-xs font-bold px-3 py-1 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20 uppercase tracking-wider">Current Plan</span>
+                        <h2 class="text-2xl font-bold text-white mt-4">Free Plan</h2>
+                        <p class="text-sm text-gray-400 mt-2">Basic remote desktop access.</p>
+                        <div class="text-3xl font-extrabold text-white mt-4">$0 <span class="text-xs font-normal text-gray-400">/ forever</span></div>
+                    </div>
+                    
+                    <ul class="space-y-4 mb-8 flex-1">
+                        <li class="flex items-center gap-3 text-sm text-gray-300">
+                            <span class="text-blue-500">✔</span>
+                            <span>5-Minute Session Limit (Auto Disconnect)</span>
+                        </li>
+                        <li class="flex items-center gap-3 text-sm text-gray-300">
+                            <span class="text-blue-500">✔</span>
+                            <span>Standard Connection Speeds</span>
+                        </li>
+                        <li class="flex items-center gap-3 text-sm text-gray-300">
+                            <span class="text-blue-500">✔</span>
+                            <span>Single Device Control</span>
+                        </li>
+                    </ul>
+
+                    <button disabled class="w-full py-3 rounded-xl border border-white/10 text-gray-500 text-sm font-semibold cursor-not-allowed">
+                        Active Free Account
+                    </button>
+                </div>
+
+                <!-- Premium Plan Card -->
+                <div class="glass rounded-3xl p-8 flex flex-col border-2 border-yellow-500/30 relative overflow-hidden">
+                    <div class="absolute top-0 right-0 bg-gradient-to-l from-yellow-500 to-amber-600 text-black text-[10px] font-bold px-4 py-1 rounded-bl-xl uppercase tracking-wider">
+                        Recommended
+                    </div>
+                    <div class="mb-6">
+                        <span class="text-xs font-bold px-3 py-1 rounded-full bg-yellow-500/10 text-yellow-400 border border-yellow-500/20 uppercase tracking-wider">Premium Access</span>
+                        <h2 class="text-2xl font-bold text-white mt-4 font-extrabold">⭐ Pro Plan</h2>
+                        <p class="text-sm text-gray-400 mt-2">Fully unlimited professional access.</p>
+                        <div class="text-3xl font-extrabold text-white mt-4">Premium <span class="text-xs font-normal text-gray-400">/ check details</span></div>
+                    </div>
+                    
+                    <ul class="space-y-4 mb-8 flex-1">
+                        <li class="flex items-center gap-3 text-sm text-gray-300">
+                            <span class="text-yellow-500">✔</span>
+                            <span class="font-semibold text-white">Unlimited Session Duration (No Disconnect)</span>
+                        </li>
+                        <li class="flex items-center gap-3 text-sm text-gray-300">
+                            <span class="text-yellow-500">✔</span>
+                            <span>Ultra-Low Latency & High Frame Rates</span>
+                        </li>
+                        <li class="flex items-center gap-3 text-sm text-gray-300">
+                            <span class="text-yellow-500">✔</span>
+                            <span>Unlimited Device Registration</span>
+                        </li>
+                        <li class="flex items-center gap-3 text-sm text-gray-300">
+                            <span class="text-yellow-500">✔</span>
+                            <span>24/7 Priority Support (Nodemailer Admin confirmation)</span>
+                        </li>
+                    </ul>
+
+                    <button onclick="scrollToUpgradeForm()" class="w-full py-3 rounded-xl btn-premium text-white text-sm font-bold shadow-lg">
+                        Proceed to Upgrade →
+                    </button>
+                </div>
+
+            </div>
+
+            <!-- Upgrade Form Card -->
+            <div id="upgrade-section" class="glass rounded-3xl p-8 w-full max-w-xl mb-16 border border-white/15">
+                <h3 class="text-xl font-bold text-white text-center mb-2">Upgrade Request Form</h3>
+                <p class="text-xs text-gray-400 text-center mb-6">Enter your billing and payment details below. The admin will verify payment and reply with your Premium passkey.</p>
+
+                <!-- Status Messages -->
+                <div id="form-error" class="hidden bg-red-500/10 border border-red-500/30 text-red-300 text-xs rounded-xl p-4 mb-6 text-center"></div>
+                <div id="form-success" class="hidden bg-green-500/10 border border-green-500/30 text-green-300 text-xs rounded-xl p-4 mb-6 text-center"></div>
+
+                <form id="upgrade-form" onsubmit="handleUpgradeRequest(event)">
+                    <!-- Name -->
+                    <div class="mb-4">
+                        <label class="block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2">Your Full Name</label>
+                        <input type="text" id="upgrade-name" required placeholder="Shiv Shankar" 
+                               class="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm text-white transition-all">
+                    </div>
+
+                    <!-- Email -->
+                    <div class="mb-4">
+                        <label class="block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2">Your Email Address</label>
+                        <input type="email" id="upgrade-email" required placeholder="yadhavshiva259@gmail.com" 
+                               class="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm text-white transition-all">
+                    </div>
+
+                    <!-- Phone Number -->
+                    <div class="mb-4">
+                        <label class="block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2">Your Phone Number</label>
+                        <input type="tel" id="upgrade-phone" required placeholder="+91 9876543210" 
+                               class="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm text-white transition-all">
+                    </div>
+
+                    <!-- Optional message -->
+                    <div class="mb-6">
+                        <label class="block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2">Message or Payment Ref (Optional)</label>
+                        <textarea id="upgrade-message" rows="3" placeholder="Any additional notes or transaction ID..." 
+                                  class="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm text-white transition-all resize-none"></textarea>
+                    </div>
+
+                    <button type="submit" id="upgrade-submit-btn" class="w-full py-4 rounded-xl btn-premium text-white text-sm font-bold uppercase tracking-wider">
+                        Proceed & Notify Admin
+                    </button>
+                </form>
+            </div>
+
+        </div>
+
+        <!-- Footer -->
+        <footer class="text-center py-6 border-t border-white/5 mt-auto">
+            <p class="text-[10px] text-gray-600 font-mono tracking-widest uppercase">Developed by Shiv Shankar</p>
+        </footer>
+
+    </div>
+
+    <script>
+        const API = 'https://remotelink-relay.onrender.com';
+
+        // Pre-fill user data if logged in
+        (async function() {
+            const token = localStorage.getItem('token') || localStorage.getItem('jarvis_token');
+            if (token) {
+                try {
+                    const r = await fetch(API + '/api/auth/me', { headers: { 'Authorization': 'Bearer ' + token } });
+                    if (r.ok) {
+                        const data = await r.json();
+                        const user = data.user;
+                        if (user) {
+                            document.getElementById('upgrade-name').value = user.name || '';
+                            document.getElementById('upgrade-email').value = user.email || '';
+                        }
+                    }
+                } catch(e) {}
+            }
+        })();
+
+        function scrollToUpgradeForm() {
+            document.getElementById('upgrade-section').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        async function handleUpgradeRequest(e) {
+            e.preventDefault();
+            const btn = document.getElementById('upgrade-submit-btn');
+            const errBox = document.getElementById('form-error');
+            const succBox = document.getElementById('form-success');
+            
+            errBox.classList.add('hidden');
+            succBox.classList.add('hidden');
+            
+            const name = document.getElementById('upgrade-name').value.trim();
+            const email = document.getElementById('upgrade-email').value.trim();
+            const phone = document.getElementById('upgrade-phone').value.trim();
+            const message = document.getElementById('upgrade-message').value.trim();
+
+            btn.textContent = 'Sending Upgrade Request...';
+            btn.disabled = true;
+
+            try {
+                const res = await fetch(API + '/api/auth/request-upgrade', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, email, phone, plan: 'Premium', message })
+                });
+
+                const data = await res.json();
+                
+                if (!res.ok || !data.success) {
+                    throw new Error(data.error || 'Failed to send request. Please try again.');
+                }
+
+                succBox.innerHTML = `
+                    <div class="text-left space-y-2">
+                        <p class="font-bold text-sm text-green-400">✅ Request Sent Successfully!</p>
+                        <p class="text-xs text-gray-300">Your details have been submitted. Please check your Gmail inbox at <strong class="text-white">${email}</strong> for instructions.</p>
+                        <p class="text-xs text-gray-400">Our administrator will review the payment request and email you the premium activation passkey. Please wait for the admin response in your email.</p>
+                    </div>
+                `;
+                succBox.classList.remove('hidden');
+                document.getElementById('upgrade-form').reset();
+                succBox.scrollIntoView({ behavior: 'smooth' });
+
+            } catch (err) {
+                errBox.textContent = err.message;
+                errBox.classList.remove('hidden');
+            } finally {
+                btn.textContent = 'Proceed & Notify Admin';
+                btn.disabled = false;
+            }
+        }
+    </script>
+</body>
+</html>

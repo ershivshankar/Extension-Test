@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RemoteLink - Control Your PC from Anywhere</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Inter', sans-serif; background: #0a0a0a; min-height: 100vh; color: white; }
+        .glass { background: #111113; border: 1px solid rgba(255,255,255,0.06); border-radius: 16px; }
+        .stat-card { transition: transform 0.15s; }
+        .stat-card:hover { transform: translateY(-2px); }
+        .btn { cursor: pointer; border: none; font-family: inherit; transition: all 0.15s; }
+        .btn:hover { filter: brightness(1.1); }
+        .pulse { animation: pulse 2s infinite; }
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
+        .link-box { background: #0d0d0f; border: 1px solid rgba(59,130,246,0.2); border-radius: 12px; }
+        .copy-toast { position:fixed; bottom:24px; left:50%; transform:translateX(-50%); background:#22c55e; color:#fff; padding:10px 24px; border-radius:10px; font-size:0.8rem; font-weight:600; z-index:999; display:none; }
+    </style>
+</head>
+<body>
+    <!-- Loading -->
+    <div id="loading" style="position:fixed;inset:0;background:#0a0a0a;z-index:100;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px;">
+        <div style="width:44px;height:44px;background:linear-gradient(135deg,#3b82f6,#8b5cf6);border-radius:12px;display:flex;align-items:center;justify-content:center;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><rect width="20" height="14" x="2" y="3" rx="2"/><line x1="8" x2="16" y1="21" y2="21"/><line x1="12" x2="12" y1="17" y2="21"/></svg>
+        </div>
+        <p style="font-size:0.75rem;color:#555;">Connecting...</p>
+    </div>
+
+    <div id="app" style="display:none;min-height:100vh;display:none;flex-direction:column;">
+        <!-- Nav -->
+        <nav style="display:flex;align-items:center;justify-content:space-between;padding:14px 24px;background:#0d0d0f;border-bottom:1px solid rgba(255,255,255,0.04);">
+            <div style="display:flex;align-items:center;gap:10px;">
+                <div style="width:30px;height:30px;background:linear-gradient(135deg,#3b82f6,#8b5cf6);border-radius:8px;display:flex;align-items:center;justify-content:center;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5"><rect width="20" height="14" x="2" y="3" rx="2"/><line x1="8" x2="16" y1="21" y2="21"/><line x1="12" x2="12" y1="17" y2="21"/></svg>
+                </div>
+                <span style="font-weight:700;font-size:0.9rem;">RemoteLink</span>
+                <span id="badge" style="font-size:0.6rem;font-weight:700;padding:2px 8px;border-radius:20px;background:rgba(59,130,246,0.15);color:#60a5fa;border:1px solid rgba(59,130,246,0.25);text-transform:uppercase;letter-spacing:0.04em;">Free</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;">
+                <span id="nav-email" style="font-size:0.75rem;color:#555;"></span>
+                <button onclick="logout()" class="btn" style="font-size:0.7rem;color:#ef4444;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.15);padding:5px 12px;border-radius:6px;">Logout</button>
+            </div>
+        </nav>
+
+        <main style="flex:1;padding:20px;max-width:820px;margin:0 auto;width:100%;">
+            <!-- Welcome -->
+            <div style="background:linear-gradient(135deg,rgba(59,130,246,0.12),rgba(139,92,246,0.08));border:1px solid rgba(99,102,241,0.15);border-radius:16px;padding:20px;margin-bottom:16px;">
+                <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+                    <div>
+                        <h1 style="font-size:1.1rem;font-weight:800;margin-bottom:3px;">Welcome back, <span id="w-name" style="color:#818cf8;">User</span> 👋</h1>
+                        <p style="font-size:0.75rem;color:#666;">Your RemoteLink dashboard is ready.</p>
+                    </div>
+                    <div id="upgrade-cta" style="display:none;">
+                        <button onclick="window.location.href='/subscription.html'" class="btn" style="background:linear-gradient(135deg,#f59e0b,#d97706);color:white;font-size:0.75rem;font-weight:700;padding:8px 16px;border-radius:8px;">⭐ Upgrade to Premium</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Connection Link (main feature) -->
+            <div id="link-card" class="glass" style="padding:20px;margin-bottom:16px;border-color:rgba(59,130,246,0.15);">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+                    <span style="font-size:1rem;">🔗</span>
+                    <h2 style="font-size:0.85rem;font-weight:700;">Remote Control Link</h2>
+                </div>
+                <p style="font-size:0.72rem;color:#777;margin-bottom:14px;">Open this link on your phone browser to control this PC remotely.</p>
+                <div class="link-box" style="display:flex;align-items:center;gap:8px;padding:10px 14px;margin-bottom:12px;">
+                    <input type="text" id="connect-url" readonly value="Generating link..."
+                        style="flex:1;background:transparent;border:none;color:#60a5fa;font-family:'Courier New',monospace;font-size:0.72rem;outline:none;min-width:0;">
+                    <button onclick="copyLink()" id="copy-btn" class="btn" style="background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.25);color:#60a5fa;padding:5px 12px;border-radius:6px;font-size:0.68rem;font-weight:600;flex-shrink:0;">
+                        Copy
+                    </button>
+                </div>
+                <a id="open-link" href="#" target="_blank" style="font-size:0.72rem;color:#818cf8;text-decoration:none;font-weight:500;">Open in Browser →</a>
+            </div>
+
+            <!-- Stats -->
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px;">
+                <div class="glass stat-card" style="padding:16px;">
+                    <div style="font-size:0.6rem;color:#555;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px;">Status</div>
+                    <div style="display:flex;align-items:center;gap:6px;">
+                        <div class="pulse" style="width:7px;height:7px;background:#22c55e;border-radius:50%;box-shadow:0 0 6px #22c55e;"></div>
+                        <span style="font-size:0.85rem;font-weight:600;color:#22c55e;">Online</span>
+                    </div>
+                </div>
+                <div class="glass stat-card" style="padding:16px;">
+                    <div style="font-size:0.6rem;color:#555;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px;">Plan</div>
+                    <div id="plan-val" style="font-size:0.85rem;font-weight:600;">—</div>
+                </div>
+                <div class="glass stat-card" style="padding:16px;">
+                    <div style="font-size:0.6rem;color:#555;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px;">Session</div>
+                    <div id="session-val" style="font-size:0.85rem;font-weight:600;">—</div>
+                </div>
+            </div>
+
+            <!-- How to Connect -->
+            <div class="glass" style="padding:20px;margin-bottom:16px;">
+                <h2 style="font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:14px;">📱 How to Connect</h2>
+                <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;">
+                    <div>
+                        <div style="width:28px;height:28px;background:rgba(59,130,246,0.15);border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:800;color:#60a5fa;font-size:0.75rem;margin-bottom:8px;">1</div>
+                        <p style="font-size:0.7rem;color:#888;line-height:1.5;">Run <strong style="color:#ccc;">Jarvis Remote.exe</strong> on the PC</p>
+                    </div>
+                    <div>
+                        <div style="width:28px;height:28px;background:rgba(139,92,246,0.15);border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:800;color:#a78bfa;font-size:0.75rem;margin-bottom:8px;">2</div>
+                        <p style="font-size:0.7rem;color:#888;line-height:1.5;">Copy the <strong style="color:#ccc;">Remote Control Link</strong> above</p>
+                    </div>
+                    <div>
+                        <div style="width:28px;height:28px;background:rgba(34,197,94,0.15);border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:800;color:#4ade80;font-size:0.75rem;margin-bottom:8px;">3</div>
+                        <p style="font-size:0.7rem;color:#888;line-height:1.5;">Open the link on your <strong style="color:#ccc;">phone browser</strong></p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Account -->
+            <div class="glass" style="padding:20px;">
+                <h2 style="font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:12px;">👤 Account</h2>
+                <div id="acc-name" style="display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.04);font-size:0.75rem;"><span style="color:#555;">Name</span><span>—</span></div>
+                <div id="acc-email" style="display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.04);font-size:0.75rem;"><span style="color:#555;">Email</span><span>—</span></div>
+                <div id="acc-plan" style="display:flex;justify-content:space-between;padding:10px 0;font-size:0.75rem;"><span style="color:#555;">Plan</span><span>—</span></div>
+            </div>
+        </main>
+
+        <footer style="padding:14px;text-align:center;font-size:0.58rem;color:#333;font-family:monospace;letter-spacing:0.08em;text-transform:uppercase;border-top:1px solid rgba(255,255,255,0.03);">
+            Developed by Shiv Shankar
+        </footer>
+    </div>
+
+    <div id="copy-toast" class="copy-toast">✅ Link copied to clipboard!</div>
+
+    <script>
+        const API = 'https://remotelink-relay.onrender.com';
+
+        function logout() {
+            localStorage.removeItem('token');
+            localStorage.removeItem('jarvis_token');
+            document.cookie = 'token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+            document.cookie = 'jarvis_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+            window.location.replace('/login.html');
+        }
+
+        function copyLink() {
+            const input = document.getElementById('connect-url');
+            navigator.clipboard.writeText(input.value).then(() => {
+                const toast = document.getElementById('copy-toast');
+                toast.style.display = 'block';
+                setTimeout(() => toast.style.display = 'none', 2000);
+            });
+        }
+
+        // Get connection URL from Electron API
+        async function loadConnectUrl() {
+            const urlInput = document.getElementById('connect-url');
+            const openLink = document.getElementById('open-link');
+
+            if (window.electronAPI && typeof window.electronAPI.getConnectUrl === 'function') {
+                const poll = async () => {
+                    try {
+                        const url = await window.electronAPI.getConnectUrl();
+                        if (url && url.startsWith('http')) {
+                            urlInput.value = url;
+                            openLink.href = url;
+                            return;
+                        }
+                    } catch(e) {}
+                    setTimeout(poll, 1000);
+                };
+                poll();
+            } else {
+                // Not in Electron - try building URL from token
+                urlInput.value = 'Launch Jarvis Remote.exe to generate control link';
+                openLink.style.display = 'none';
+            }
+        }
+
+        async function init() {
+            const token = localStorage.getItem('token') || localStorage.getItem('jarvis_token');
+            if (!token) return window.location.replace('/login.html');
+
+            try {
+                const res = await fetch(API + '/api/auth/me', { headers: { 'Authorization': 'Bearer ' + token } });
+                if (!res.ok) {
+                    localStorage.removeItem('token');
+                    localStorage.removeItem('jarvis_token');
+                    return window.location.replace('/login.html');
+                }
+
+                const data = await res.json();
+                const u = data.user;
+                const pro = u.plan === 'pro';
+
+                document.getElementById('w-name').textContent = u.name || u.email.split('@')[0];
+                document.getElementById('nav-email').textContent = u.email;
+
+                // Account section
+                document.getElementById('acc-name').lastElementChild.textContent = u.name || '—';
+                document.getElementById('acc-email').lastElementChild.textContent = u.email;
+
+                if (pro) {
+                    document.getElementById('badge').textContent = 'Premium';
+                    document.getElementById('badge').style.background = 'rgba(245,158,11,0.15)';
+                    document.getElementById('badge').style.color = '#fbbf24';
+                    document.getElementById('badge').style.borderColor = 'rgba(245,158,11,0.25)';
+                    document.getElementById('plan-val').textContent = '⭐ Premium';
+                    document.getElementById('plan-val').style.color = '#fbbf24';
+                    document.getElementById('session-val').textContent = 'Unlimited';
+                    document.getElementById('session-val').style.color = '#4ade80';
+                    document.getElementById('acc-plan').lastElementChild.textContent = '⭐ Premium';
+                    document.getElementById('acc-plan').lastElementChild.style.color = '#fbbf24';
+                } else {
+                    document.getElementById('plan-val').textContent = '🆓 Free';
+                    document.getElementById('session-val').textContent = '5 min';
+                    document.getElementById('session-val').style.color = '#f87171';
+                    document.getElementById('acc-plan').lastElementChild.textContent = '🆓 Free';
+                    document.getElementById('acc-plan').lastElementChild.style.color = '#60a5fa';
+                    document.getElementById('upgrade-cta').style.display = 'block';
+                }
+            } catch(e) {
+                console.error(e);
+            }
+
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('app').style.display = 'flex';
+            loadConnectUrl();
+        }
+
+        init();
+    </script>
+</body>
+</html>

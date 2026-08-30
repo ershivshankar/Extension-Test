@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>RemoteLink Activation</title>
+    <style>
+        body {
+            background-color: #0f172a;
+            color: white;
+            font-family: 'Segoe UI', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            -webkit-app-region: drag;
+        }
+
+        .container {
+            text-align: center;
+            background: #1e293b;
+            padding: 40px;
+            border-radius: 12px;
+            width: 80%;
+            max-width: 400px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+            border: 1px solid #334155;
+        }
+
+        h2 {
+            margin-top: 0;
+            margin-bottom: 20px;
+            color: #38bdf8;
+        }
+
+        p {
+            color: #94a3b8;
+            font-size: 14px;
+            margin-bottom: 30px;
+        }
+
+        input {
+            width: 100%;
+            padding: 12px;
+            border-radius: 6px;
+            border: 1px solid #475569;
+            background: #0f172a;
+            color: white;
+            font-size: 16px;
+            text-align: center;
+            margin-bottom: 20px;
+            -webkit-app-region: no-drag;
+            letter-spacing: 2px;
+        }
+
+        input:focus {
+            outline: 2px solid #38bdf8;
+            border-color: transparent;
+        }
+
+        button {
+            background: #38bdf8;
+            color: #0f172a;
+            font-weight: 700;
+            padding: 12px 30px;
+            border-radius: 6px;
+            border: none;
+            cursor: pointer;
+            font-size: 16px;
+            -webkit-app-region: no-drag;
+            transition: all 0.2s;
+        }
+
+        button:hover {
+            background: #0ea5e9;
+            transform: translateY(-1px);
+        }
+
+        .error {
+            color: #ef4444;
+            margin-top: 15px;
+            font-size: 13px;
+            display: none;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h2>Enter License Key</h2>
+        <p>Please enter your product key to activate RemoteLink.</p>
+        <input type="text" id="keyInput" placeholder="JARVIS-XXXX-XXXX" />
+        <button onclick="activate()">Activate</button>
+        <div id="errorMsg" class="error">Invalid License Key</div>
+    </div>
+
+    <script>
+        const { ipcRenderer, shell } = require('electron');
+
+        // 🛠️ Robust Reason Handling (IPC + URL Fallback)
+        function handleReason(reason) {
+            if (!reason) return;
+            console.log("🛡️ Applying Reason:", reason);
+            document.querySelector('h2').innerText = "Access Restricted";
+            document.querySelector('p').innerText = reason;
+
+            // If it's an update, show a different button
+            if (reason.includes("UPDATE")) {
+                const btn = document.querySelector('button');
+                btn.innerText = "Download Update";
+                btn.onclick = () => {
+                    shell.openExternal("https://remotelinkrc.space/download");
+                };
+                document.getElementById('keyInput').style.display = 'none';
+            }
+
+            // 🚫 PAUSE / SUSPENDED HANDLING
+            if (reason.includes("Paused") || reason.includes("Suspended") || reason.includes("Blocked")) {
+                document.querySelector('button').style.display = 'none';
+                document.getElementById('keyInput').style.display = 'none';
+            }
+        }
+
+        // 1. URL Fallback
+        const params = new URLSearchParams(window.location.search);
+        handleReason(params.get('reason'));
+
+        // 2. Reliable IPC Listener
+        ipcRenderer.on('set-reason', (event, reason) => {
+            handleReason(reason);
+        });
+
+        function activate() {
+            const key = document.getElementById('keyInput').value;
+            const btn = document.querySelector('button');
+            const error = document.getElementById('errorMsg');
+
+            if (!key || key.length < 5) {
+                error.style.display = 'block';
+                error.innerText = "Please enter a valid key";
+                return;
+            }
+
+            btn.disabled = true;
+            btn.innerText = "Checking...";
+            error.style.display = 'none';
+
+            ipcRenderer.invoke('activate-license', key).then((result) => {
+                if (result.success) {
+                    btn.style.background = '#22c55e';
+                    btn.innerText = "Success!";
+                    setTimeout(() => {
+                        ipcRenderer.send('activation-success');
+                    }, 1000);
+                } else {
+                    btn.disabled = false;
+                    btn.innerText = "Activate";
+                    error.style.display = 'block';
+                    error.innerText = result.error || "Invalid Key";
+                }
+            });
+        }
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,861 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+    <title>Jarvis Touch</title>
+    <link rel="manifest" href="manifest.json">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Jarvis">
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* CRITICAL STYLES (Fallback for Tailwind) */
+        body {
+            background-color: #111;
+            color: white;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            margin: 0;
+            font-family: sans-serif;
+        }
+
+        #login-screen {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            gap: 1rem;
+        }
+
+        input {
+            padding: 10px;
+            border-radius: 5px;
+            border: 1px solid #333;
+            background: #222;
+            color: white;
+            text-align: center;
+            font-size: 1.2rem;
+        }
+
+        button {
+            padding: 15px 30px;
+            background: #2563eb;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-weight: bold;
+            font-size: 1rem;
+            cursor: pointer;
+        }
+
+        /* Allow zooming and panning */
+        body {
+            background-color: #000;
+            color: white;
+            touch-action: manipulation;
+            font-family: sans-serif;
+        }
+
+        .btn:active {
+            transform: scale(0.95);
+        }
+
+        .glass {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        #trackpad-area {
+            touch-action: manipulation;
+            position: relative;
+            background: #000;
+            border: 1px solid #333;
+            border-radius: 12px;
+            overflow: hidden;
+            width: 100%;
+            /* Mobile: fixed aspect ratio */
+            aspect-ratio: 16 / 9;
+            max-height: 45vh;
+            margin: 0 auto;
+            flex-shrink: 0;
+        }
+
+        #peek-img {
+            width: 100%;
+            height: 100%;
+            object-fit: fill !important;
+            pointer-events: none;
+        }
+
+        @keyframes ripple-effect {
+            0% {
+                transform: translate(-50%, -50%) scale(0);
+                opacity: 0.8;
+            }
+
+            100% {
+                transform: translate(-50%, -50%) scale(4);
+                opacity: 0;
+            }
+        }
+
+        .ripple {
+            position: fixed;
+            border-radius: 50%;
+            background: rgba(59, 130, 246, 0.7);
+            box-shadow: 0 0 10px rgba(59, 130, 246, 0.8);
+            width: 30px;
+            height: 30px;
+            pointer-events: none;
+            animation: ripple-effect 0.5s ease-out forwards;
+            z-index: 9999;
+        }
+
+        /* Laptop/Desktop: fill all remaining vertical space */
+        @media (min-width: 768px) {
+            body {
+                overflow: hidden;
+            }
+            #deck-screen {
+                height: 100vh;
+                overflow: hidden;
+            }
+            #trackpad-area {
+                aspect-ratio: unset !important;
+                max-height: unset !important;
+                flex: 1 1 0;
+                min-height: 0;
+                border-radius: 8px;
+            }
+            #peek-img {
+                object-fit: fill;
+            }
+        }
+    </style>
+</head>
+
+<body class="flex flex-col h-screen p-4">
+
+    <!-- LOGIN -->
+    <div id="login-screen" class="flex flex-col items-center justify-center h-full space-y-4">
+        <h1 class="text-3xl font-bold text-blue-500">Jarvis Touch</h1>
+        <p class="text-gray-400 text-xs px-8 text-center">Enter the Scan Token or a Manual Passcode</p>
+        <input type="password" id="token-input" placeholder="Passcode (Default: 123456)"
+            class="bg-gray-800 p-3 rounded text-white text-center w-64 border border-gray-700 focus:border-blue-500 outline-none">
+
+        <button onclick="connect()"
+            class="bg-blue-600 px-8 py-3 rounded font-bold shadow-lg shadow-blue-600/20 active:scale-95 transition">Connect</button>
+        <p id="status" class="text-xs text-gray-500">Ready</p>
+    </div>
+
+    <!-- MAIN INTERFACE -->
+    <div id="deck-screen" class="hidden flex-col h-full gap-2">
+
+        <!-- TOOLBAR -->
+        <div class="flex justify-between items-center bg-gray-900 p-2 rounded-lg gap-2">
+            <div class="flex gap-2 flex-wrap">
+                <button onclick="emit('command:lock')"
+                    class="p-2 bg-red-900/50 rounded text-red-500 text-xs font-bold w-12">LOCK</button>
+                <button onclick="toggleKeyboard()"
+                    class="p-2 bg-gray-700 rounded text-white text-[10px] w-12 flex flex-col items-center"><span>⌨️</span><span>KEYS</span></button>
+                <button onclick="toggleRealtimePanel()" id="rt-btn"
+                    class="p-2 bg-gray-700 rounded text-white text-[10px] w-12 flex flex-col items-center"><span>⚡</span><span>LIVE</span></button>
+                <button onclick="toggleAutoPanel()" id="auto-btn"
+                    class="p-2 bg-gray-700 rounded text-white text-[10px] w-12 flex flex-col items-center"><span>🤖</span><span>AUTO</span></button>
+                <button onclick="toggleCamera()" id="cam-btn"
+                    class="p-2 bg-gray-700 rounded text-white text-[10px] w-12 flex flex-col items-center"><span>👁️</span><span
+                        id="cam-label">PEEK</span></button>
+                <button onclick="toggleMic()" id="mic-btn"
+                    class="p-2 bg-gray-700 rounded text-white text-[10px] w-12 flex flex-col items-center"><span>🎤</span><span>MIC</span></button>
+                <button onclick="toggleMouseMode()" id="mouse-btn"
+                    class="p-2 bg-gray-700 rounded text-white text-[10px] w-12 flex flex-col items-center"><span>🖱️</span><span id="mouse-label">MOUSE</span></button>
+            </div>
+
+            <!-- Media Controls (Volume Down / Up) -->
+            <div class="flex gap-1">
+                <button onclick="emit('command:media', {action:'voldown'})"
+                    class="p-2 bg-gray-800 rounded text-white text-xs w-8 active:bg-blue-600">-</button>
+                <button onclick="emit('command:media', {action:'volup'})"
+                    class="p-2 bg-gray-800 rounded text-white text-xs w-8 active:bg-blue-600">+</button>
+            </div>
+        </div>
+
+        <!-- REALTIME TYPING PANEL (collapsed by default) -->
+        <div id="realtime-panel" class="hidden items-center bg-gray-900 p-2 rounded-lg gap-2">
+            <span class="text-xs text-gray-500">⚡</span>
+            <input id="clip-input" type="text" placeholder="Type here in Realtime..."
+                class="bg-gray-800 text-white text-xs p-2 rounded flex-1 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+            <button onclick="clearTypeBox()"
+                class="p-2 bg-red-900/50 text-red-400 border border-red-900 rounded text-[10px] font-bold active:bg-red-800">CLEAR</button>
+        </div>
+
+        <!-- AUTO TYPER PANEL (collapsed by default) -->
+        <div id="auto-panel" class="hidden items-center bg-gray-900 p-2 rounded-lg gap-2">
+            <span class="text-xs text-gray-500">🤖</span>
+            <input id="auto-input" type="text" placeholder="Paste text to Auto-Type..."
+                class="bg-gray-800 text-white text-xs p-2 rounded flex-1 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+            <button onclick="startAutoType()"
+                class="p-2 bg-blue-900/50 text-blue-400 border border-blue-900 rounded text-[10px] font-bold active:bg-blue-800">AUTO TYPE</button>
+            <button onclick="adjustSpeed(-1)"
+                class="p-2 bg-gray-800 text-gray-300 rounded text-[10px] font-bold active:bg-gray-700">SPEED -</button>
+            <span id="speed-label" class="text-[10px] text-gray-400 font-mono w-10 text-center">50ms</span>
+            <button onclick="adjustSpeed(1)"
+                class="p-2 bg-gray-800 text-gray-300 rounded text-[10px] font-bold active:bg-gray-700">SPEED +</button>
+        </div>
+
+        <!-- TOUCH AREA (SCREEN) with Waiting Message -->
+        <div id="trackpad-area" class="flex-1 relative bg-gray-900 border border-gray-700">
+            <!-- Video Feed -->
+            <img id="peek-img" src="" class="absolute inset-0 w-full h-full object-fill opacity-50"
+                alt="Screen Stream"
+                onerror="this.style.opacity=0; document.getElementById('lock-overlay').classList.remove('hidden');"
+                onload="this.style.opacity=1; document.getElementById('lock-overlay').classList.add('hidden'); if(window.innerWidth < 768 && this.naturalWidth && this.naturalHeight){ document.getElementById('trackpad-area').style.aspectRatio = (this.naturalWidth / this.naturalHeight); }" />
+
+            <div id="touch-layer" class="absolute inset-0 w-full h-full z-20"></div>
+
+            <!-- Connecting Spinner (Initial) -->
+            <div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-10"
+                id="waiting-msg">
+                <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-white mb-2"></div>
+                <span class="text-white text-lg font-bold shadow-black drop-shadow-md">Connecting Video...</span>
+            </div>
+
+            <!-- LOCK SCREEN / NO SIGNAL OVERLAY -->
+            <div id="lock-overlay"
+                class="hidden absolute inset-0 flex flex-col items-center justify-center bg-gray-900/95 z-40 pointer-events-auto">
+                <span class="text-4xl mb-4">🔒</span>
+                <h3 class="text-red-500 font-bold text-xl tracking-widest">SIGNAL LOCKED</h3>
+                <p class="text-gray-400 text-xs mt-2 text-center max-w-[200px]">
+                    Windows Security has blocked screen capture.
+                </p>
+
+                <form onsubmit="event.preventDefault(); sendBlindUnlock();" class="mt-6 flex flex-col gap-3 w-64">
+                    <input type="password" id="unlock-pass" placeholder="Enter PC PIN/Password"
+                        class="p-3 rounded bg-gray-800 border border-gray-600 text-white text-center focus:border-blue-500 outline-none text-lg placeholder-gray-600 shadow-inner">
+                    <button type="submit"
+                        class="bg-green-600 hover:bg-green-500 p-3 rounded font-bold text-white shadow-lg active:scale-95 transition flex items-center justify-center gap-2">
+                        <span>🔓</span> UNLOCK PC
+                    </button>
+                    <p class="text-[10px] text-gray-500 text-center">Types password & hits Enter automatically.</p>
+                </form>
+            </div>
+        </div>
+
+        <!-- MOUSE BUTTONS -->
+        <div class="grid grid-cols-2 gap-2 h-16">
+            <button class="bg-gray-800 rounded active:bg-blue-600 font-bold text-gray-400"
+                ontouchstart="emit('command:click', {button:'left'}); navigator.vibrate(10);"
+                onclick="emit('command:click', {button:'left'})">L-CLICK</button>
+            <button class="bg-gray-800 rounded active:bg-blue-600 font-bold text-gray-400"
+                ontouchstart="emit('command:click', {button:'right'}); navigator.vibrate(10);"
+                onclick="emit('command:click', {button:'right'})">R-CLICK</button>
+        </div>
+
+        <!-- MOBILE REMOTE KEYBOARD DRAWER -->
+        <div id="keyboard-drawer" class="flex flex-col gap-2 bg-gray-900 border border-gray-700 p-2 rounded-lg text-xs">
+            <!-- Row 1: Nav & Special Keys -->
+            <div class="grid grid-cols-6 gap-1">
+                <button onclick="emit('command:key', {key:'escape'}); navigator.vibrate(10);" class="bg-gray-800 hover:bg-gray-700 active:bg-blue-600 p-2 rounded text-red-400 font-bold">ESC</button>
+                <button onclick="emit('command:key', {key:'tab'}); navigator.vibrate(10);" class="bg-gray-800 hover:bg-gray-700 active:bg-blue-600 p-2 rounded text-blue-400 font-bold">TAB</button>
+                <button onclick="emit('command:key', {key:'space'}); navigator.vibrate(10);" class="bg-gray-800 hover:bg-gray-700 active:bg-blue-600 p-2 rounded text-gray-200 font-bold">SPACE</button>
+                <button onclick="emit('command:key', {key:'capslock'}); navigator.vibrate(10);" class="bg-gray-800 hover:bg-gray-700 active:bg-blue-600 p-2 rounded text-yellow-400 font-bold">CAPS</button>
+                <button onclick="emit('command:key', {key:'backspace'}); navigator.vibrate(10);" class="bg-gray-800 hover:bg-gray-700 active:bg-red-600 p-2 rounded text-red-300 font-bold">⌫ BACK</button>
+                <button onclick="emit('command:key', {key:'enter'}); navigator.vibrate(10);" class="bg-blue-700 hover:bg-blue-600 active:bg-blue-500 p-2 rounded text-white font-bold">↵ ENTER</button>
+            </div>
+
+            <!-- Row 2: Arrow Navigation & Editing -->
+            <div class="grid grid-cols-7 gap-1 text-center">
+                <button onclick="emit('command:key', {key:'left'}); navigator.vibrate(10);" class="bg-gray-800 hover:bg-gray-700 active:bg-blue-600 p-2 rounded text-white font-bold">←</button>
+                <button onclick="emit('command:key', {key:'up'}); navigator.vibrate(10);" class="bg-gray-800 hover:bg-gray-700 active:bg-blue-600 p-2 rounded text-white font-bold">↑</button>
+                <button onclick="emit('command:key', {key:'down'}); navigator.vibrate(10);" class="bg-gray-800 hover:bg-gray-700 active:bg-blue-600 p-2 rounded text-white font-bold">↓</button>
+                <button onclick="emit('command:key', {key:'right'}); navigator.vibrate(10);" class="bg-gray-800 hover:bg-gray-700 active:bg-blue-600 p-2 rounded text-white font-bold">→</button>
+                <button onclick="emit('command:key', {key:'home'}); navigator.vibrate(10);" class="bg-gray-800 hover:bg-gray-700 active:bg-blue-600 p-2 rounded text-gray-300">HOME</button>
+                <button onclick="emit('command:key', {key:'end'}); navigator.vibrate(10);" class="bg-gray-800 hover:bg-gray-700 active:bg-blue-600 p-2 rounded text-gray-300">END</button>
+                <button onclick="emit('command:key', {key:'delete'}); navigator.vibrate(10);" class="bg-gray-800 hover:bg-gray-700 active:bg-red-600 p-2 rounded text-red-400 font-bold">DEL</button>
+            </div>
+
+            <!-- Row 3: Quick Action Shortcuts -->
+            <div class="grid grid-cols-5 gap-1">
+                <button onclick="emit('command:key', {key:'selectall'}); navigator.vibrate(10);" class="bg-indigo-900/60 hover:bg-indigo-800 p-2 rounded text-indigo-300 font-bold">SEL ALL</button>
+                <button onclick="emit('command:key', {key:'copy'}); navigator.vibrate(10);" class="bg-emerald-900/60 hover:bg-emerald-800 p-2 rounded text-emerald-300 font-bold">COPY</button>
+                <button onclick="emit('command:key', {key:'paste'}); navigator.vibrate(10);" class="bg-amber-900/60 hover:bg-amber-800 p-2 rounded text-amber-300 font-bold">PASTE</button>
+                <button onclick="emit('command:key', {key:'undo'}); navigator.vibrate(10);" class="bg-purple-900/60 hover:bg-purple-800 p-2 rounded text-purple-300 font-bold">UNDO</button>
+                <button onclick="emit('command:key', {key:'cut'}); navigator.vibrate(10);" class="bg-rose-900/60 hover:bg-rose-800 p-2 rounded text-rose-300 font-bold">CUT</button>
+            </div>
+
+            <!-- Row 4: Code Symbols Bar (Scrollable) -->
+            <div class="flex gap-1 overflow-x-auto py-1 no-scrollbar">
+                <button onclick="emit('command:type', {text:'('});" class="bg-gray-800 min-w-[32px] p-2 rounded text-yellow-300 font-mono font-bold">(</button>
+                <button onclick="emit('command:type', {text:')'});" class="bg-gray-800 min-w-[32px] p-2 rounded text-yellow-300 font-mono font-bold">)</button>
+                <button onclick="emit('command:type', {text:'{'});" class="bg-gray-800 min-w-[32px] p-2 rounded text-yellow-300 font-mono font-bold">{</button>
+                <button onclick="emit('command:type', {text:'}'});" class="bg-gray-800 min-w-[32px] p-2 rounded text-yellow-300 font-mono font-bold">}</button>
+                <button onclick="emit('command:type', {text:'['});" class="bg-gray-800 min-w-[32px] p-2 rounded text-yellow-300 font-mono font-bold">[</button>
+                <button onclick="emit('command:type', {text:']'});" class="bg-gray-800 min-w-[32px] p-2 rounded text-yellow-300 font-mono font-bold">]</button>
+                <button onclick="emit('command:type', {text:'<' });" class="bg-gray-800 min-w-[32px] p-2 rounded text-cyan-300 font-mono font-bold">&lt;</button>
+                <button onclick="emit('command:type', {text:'>'});" class="bg-gray-800 min-w-[32px] p-2 rounded text-cyan-300 font-mono font-bold">&gt;</button>
+                <button onclick="emit('command:type', {text:'='});" class="bg-gray-800 min-w-[32px] p-2 rounded text-cyan-300 font-mono font-bold">=</button>
+                <button onclick="emit('command:type', {text:';'});" class="bg-gray-800 min-w-[32px] p-2 rounded text-green-300 font-mono font-bold">;</button>
+                <button onclick="emit('command:type', {text:':'});" class="bg-gray-800 min-w-[32px] p-2 rounded text-green-300 font-mono font-bold">:</button>
+                <button onclick="emit('command:type', {text:'\"'});" class="bg-gray-800 min-w-[32px] p-2 rounded text-green-300 font-mono font-bold">"</button>
+                <button onclick="emit('command:type', {text:'\''});" class="bg-gray-800 min-w-[32px] p-2 rounded text-green-300 font-mono font-bold">'</button>
+                <button onclick="emit('command:type', {text:'/'});" class="bg-gray-800 min-w-[32px] p-2 rounded text-orange-300 font-mono font-bold">/</button>
+                <button onclick="emit('command:type', {text:'\\'});" class="bg-gray-800 min-w-[32px] p-2 rounded text-orange-300 font-mono font-bold">\</button>
+                <button onclick="emit('command:type', {text:'+'});" class="bg-gray-800 min-w-[32px] p-2 rounded text-rose-300 font-mono font-bold">+</button>
+                <button onclick="emit('command:type', {text:'-'});" class="bg-gray-800 min-w-[32px] p-2 rounded text-rose-300 font-mono font-bold">-</button>
+                <button onclick="emit('command:type', {text:'*'});" class="bg-gray-800 min-w-[32px] p-2 rounded text-rose-300 font-mono font-bold">*</button>
+                <button onclick="emit('command:type', {text:'&'});" class="bg-gray-800 min-w-[32px] p-2 rounded text-purple-300 font-mono font-bold">&amp;</button>
+                <button onclick="emit('command:type', {text:'|'});" class="bg-gray-800 min-w-[32px] p-2 rounded text-purple-300 font-mono font-bold">|</button>
+                <button onclick="emit('command:type', {text:'!'});" class="bg-gray-800 min-w-[32px] p-2 rounded text-red-400 font-mono font-bold">!</button>
+                <button onclick="emit('command:type', {text:'?'});" class="bg-gray-800 min-w-[32px] p-2 rounded text-yellow-400 font-mono font-bold">?</button>
+                <button onclick="emit('command:type', {text:'_'});" class="bg-gray-800 min-w-[32px] p-2 rounded text-gray-300 font-mono font-bold">_</button>
+                <button onclick="emit('command:type', {text:'#'});" class="bg-gray-800 min-w-[32px] p-2 rounded text-gray-300 font-mono font-bold">#</button>
+                <button onclick="emit('command:type', {text:'$'});" class="bg-gray-800 min-w-[32px] p-2 rounded text-emerald-300 font-mono font-bold">$</button>
+                <button onclick="emit('command:type', {text:'@'});" class="bg-gray-800 min-w-[32px] p-2 rounded text-blue-300 font-mono font-bold">@</button>
+            </div>
+        </div>
+
+        <!-- HIDDEN KEYBOARD INPUT -->
+        <form id="kb-form" onsubmit="event.preventDefault(); emit('command:key', {key:'enter'});"
+            action="javascript:void(0);">
+            <input type="text" id="hidden-input" class="opacity-0 absolute top-0 w-1 h-1" autocomplete="off"
+                autocorrect="off" autocapitalize="none" spellcheck="false" />
+            <input type="submit" class="hidden" />
+        </form>
+    </div>
+
+    <script>
+        let socket;
+        let isStreamOn = false;
+
+        // --- AUTH ---
+        const urlParams = new URLSearchParams(window.location.search);
+        const savedToken = localStorage.getItem('jarvis_token');
+
+        if (urlParams.get('token')) {
+            document.getElementById('token-input').value = urlParams.get('token');
+            connect();
+        } else if (savedToken) {
+            console.log("Found Saved Token, connecting...");
+            document.getElementById('token-input').value = savedToken;
+            connect();
+        }
+
+        function getDeviceId() {
+            let id = localStorage.getItem('jarvis_device_id');
+            if (!id) {
+                id = 'device_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now();
+                localStorage.setItem('jarvis_device_id', id);
+            }
+            return id;
+        }
+
+        function sendPin() {
+            const pin = document.getElementById('pin-entry').value;
+            if (pin && socket) {
+                socket.emit('command:verify-pin', pin);
+            }
+        }
+
+        function connect() {
+            const inputVal = document.getElementById('token-input').value;
+            if (!inputVal) return;
+
+            document.getElementById('status').innerText = "Connecting...";
+
+            document.getElementById('login-screen').style.display = 'none';
+            document.getElementById('deck-screen').classList.remove('hidden');
+            document.getElementById('deck-screen').classList.add('flex');
+
+            const deviceId = getDeviceId();
+
+            let authData = { deviceId };
+            if (inputVal.length > 20) {
+                authData.token = inputVal;
+            } else {
+                authData.password = inputVal;
+            }
+
+            const urlParams = new URLSearchParams(window.location.search);
+            const relayUrl = urlParams.get('relay') || 'https://jarvis-relay-hub-production.up.railway.app';
+
+            socket = io(relayUrl, {
+                auth: authData,
+                transports: ['websocket', 'polling'],
+                extraHeaders: {
+                    "ngrok-skip-browser-warning": "true"
+                },
+                reconnection: true,
+                reconnectionAttempts: Infinity,
+                reconnectionDelay: 1000,
+                reconnectionDelayMax: 5000,
+                timeout: 10000,
+                forceNew: true
+            });
+
+            socket.on('connect', () => {
+                document.getElementById('login-screen').classList.add('hidden');
+                document.getElementById('deck-screen').classList.remove('hidden');
+                document.getElementById('deck-screen').classList.add('flex');
+
+                socket.emit('identify', {
+                    type: 'mobile',
+                    pairingToken: inputVal,
+                    deviceId: deviceId
+                });
+
+                document.getElementById('approval-overlay').classList.add('hidden');
+
+                startStream();
+            });
+
+            socket.on('connection:approved', () => {
+                const token = document.getElementById('token-input').value;
+                if (token) localStorage.setItem('jarvis_token', token);
+
+                document.getElementById('approval-overlay').classList.add('hidden');
+            });
+
+            socket.on('mic:data', (data) => {
+                if (!isMicOn) return;
+                if (data.chunk) {
+                    playAudioChunk(data.chunk);
+                }
+            });
+
+            socket.on('peek:data', (data) => {
+                const img = document.getElementById('peek-img');
+                if (data.image) {
+                    img.style.objectFit = 'contain';
+                    img.src = data.image;
+                    document.getElementById('waiting-msg').style.display = 'none';
+                }
+            });
+
+            socket.on('camera:data', (data) => {
+                const img = document.getElementById('peek-img');
+                if (data.image) {
+                    img.style.objectFit = 'contain';
+                    img.src = data.image;
+                    img.style.opacity = '1';
+                    document.getElementById('waiting-msg').style.display = 'none';
+                }
+            });
+
+            socket.on('clipboard:data', (data) => {
+                if (data.text) {
+                    document.getElementById('clip-input').value = data.text;
+                    try { navigator.clipboard.writeText(data.text); } catch (e) { }
+                }
+            });
+
+            socket.on('auth:required', () => {
+                console.log("🔒 Authentication Required: PIN");
+                document.getElementById('pin-overlay').classList.remove('hidden');
+                document.getElementById('pin-overlay').classList.add('flex');
+            });
+
+            socket.on('auth:failed', () => {
+                alert("Incorrect PIN");
+                document.getElementById('pin-entry').value = '';
+            });
+
+            socket.on('connection:approved', () => {
+                console.log("✅ Connection Approved!");
+                document.getElementById('waiting-msg').style.display = 'none';
+                document.getElementById('lock-overlay').classList.add('hidden');
+                document.getElementById('pin-overlay').classList.add('hidden');
+                document.getElementById('pin-overlay').classList.remove('flex');
+                startStream();
+            });
+
+            socket.on('disconnect', () => {
+                document.getElementById('waiting-msg').style.display = 'flex';
+                document.getElementById('waiting-msg').querySelector('span').innerText = "Disconnected";
+            });
+        }
+
+        function emit(ev, data = {}) {
+            if (socket) socket.emit(ev, data);
+        }
+
+        // --- STREAMING ---
+        let isCameraMode = false;
+
+        function toggleCamera() {
+            isCameraMode = !isCameraMode;
+            const btn = document.getElementById('cam-btn');
+            const label = document.getElementById('cam-label');
+            if (isCameraMode) {
+                btn.style.backgroundColor = '#ef4444';
+                btn.querySelector('span:first-child').innerText = '🎥';
+                label.innerText = 'CAM';
+            } else {
+                socket.emit('command:camera-stop');
+                btn.style.backgroundColor = '#374151';
+                btn.querySelector('span:first-child').innerText = '👁️';
+                label.innerText = 'PEEK';
+            }
+        }
+
+        let isMicOn = false;
+        let audioCtx = null;
+        let nextStartTime = 0;
+
+        function playAudioChunk(base64Chunk) {
+            if (!audioCtx) return;
+
+            try {
+                const binaryString = window.atob(base64Chunk);
+                const len = binaryString.length;
+                const bytes = new Uint8Array(len);
+                for (let i = 0; i < len; i++) {
+                    bytes[i] = binaryString.charCodeAt(i);
+                }
+                const int16Data = new Int16Array(bytes.buffer);
+                const floatData = new Float32Array(int16Data.length);
+                for (let i = 0; i < int16Data.length; i++) {
+                    const int = int16Data[i];
+                    floatData[i] = int < 0 ? int / 0x8000 : int / 0x7FFF;
+                }
+
+                const buffer = audioCtx.createBuffer(1, floatData.length, 16000);
+                buffer.copyToChannel(floatData, 0);
+
+                const source = audioCtx.createBufferSource();
+                source.buffer = buffer;
+                source.connect(audioCtx.destination);
+
+                const now = audioCtx.currentTime;
+                if (nextStartTime < now) nextStartTime = now + 0.05;
+
+                source.start(nextStartTime);
+                nextStartTime += buffer.duration;
+
+            } catch (e) { console.error("PCM Playback Error", e); }
+        }
+
+        function toggleMic() {
+            isMicOn = !isMicOn;
+            const btn = document.getElementById('mic-btn');
+
+            if (isMicOn) {
+                if (!audioCtx) {
+                    const AudioContext = window.AudioContext || window.webkitAudioContext;
+                    audioCtx = new AudioContext();
+                }
+                if (audioCtx.state === 'suspended') {
+                    audioCtx.resume();
+                }
+
+                btn.style.backgroundColor = '#ef4444';
+                btn.innerText = '🔊';
+                emit('command:mic-start');
+            } else {
+                btn.style.backgroundColor = '#374151';
+                btn.innerText = '🎤';
+                emit('command:mic-stop');
+                if (audioCtx) audioCtx.suspend();
+            }
+        }
+
+        function startStream() {
+            if (isStreamOn) return;
+            isStreamOn = true;
+            setInterval(() => {
+                if (socket && document.visibilityState === 'visible') {
+                    if (isCameraMode) {
+                        socket.emit('command:camera');
+                    } else {
+                        socket.emit('command:peek');
+                    }
+                }
+            }, 80);
+        }
+
+        // --- TOUCH LOGIC ---
+        const touchLayer = document.getElementById('touch-layer');
+        let startX = 0, startY = 0;
+        let isDrag = false;
+
+        function getMappedCoords(touch) {
+            const rect = touchLayer.getBoundingClientRect();
+            let pctX = (touch.clientX - rect.left) / rect.width;
+            let pctY = (touch.clientY - rect.top) / rect.height;
+
+            pctX = Math.max(0, Math.min(1, pctX));
+            pctY = Math.max(0, Math.min(1, pctY));
+
+            return { x: pctX, y: pctY };
+        }
+
+        touchLayer.addEventListener('touchstart', (e) => {
+            const touch = e.touches[0];
+            startX = touch.clientX;
+            startY = touch.clientY;
+            isDrag = false;
+        }, { passive: true });
+
+        touchLayer.addEventListener('touchmove', (e) => {
+            const touch = e.touches[0];
+            if (Math.abs(touch.clientX - startX) > 10 || Math.abs(touch.clientY - startY) > 10) {
+                isDrag = true;
+            }
+        }, { passive: true });
+
+        touchLayer.addEventListener('touchend', (e) => {
+            if (!isDrag && e.changedTouches.length > 0) {
+                e.preventDefault();
+
+                const touch = e.changedTouches[0];
+                const coords = getMappedCoords(touch);
+
+                emit('command:move-mouse', { x: coords.x, y: coords.y, mode: 'pct' });
+                emit('command:click', { button: 'left' });
+
+                showRipple(touch.clientX, touch.clientY);
+            }
+        });
+
+        function showRipple(x, y) {
+            if (navigator.vibrate) navigator.vibrate(15);
+
+            const ripple = document.createElement('div');
+            ripple.className = 'ripple';
+            ripple.style.left = x + 'px';
+            ripple.style.top = y + 'px';
+            document.body.appendChild(ripple);
+
+            setTimeout(() => ripple.remove(), 600);
+        }
+
+        // --- KEYBOARD ---
+        const hiddenInput = document.getElementById('hidden-input');
+
+        function toggleKeyboard() {
+            const drawer = document.getElementById('keyboard-drawer');
+            if (drawer) {
+                drawer.classList.toggle('hidden');
+                drawer.classList.toggle('flex');
+            }
+            if (hiddenInput) {
+                hiddenInput.focus();
+                hiddenInput.click();
+            }
+        }
+
+        function toggleRealtimePanel() {
+            const panel = document.getElementById('realtime-panel');
+            const btn = document.getElementById('rt-btn');
+            const isHidden = panel.classList.contains('hidden');
+            panel.classList.toggle('hidden');
+            panel.classList.toggle('flex');
+            btn.classList.toggle('bg-gray-700', !isHidden);
+            btn.classList.toggle('bg-green-700', isHidden);
+            if (isHidden) document.getElementById('clip-input').focus();
+        }
+
+        function toggleAutoPanel() {
+            const panel = document.getElementById('auto-panel');
+            const btn = document.getElementById('auto-btn');
+            const isHidden = panel.classList.contains('hidden');
+            panel.classList.toggle('hidden');
+            panel.classList.toggle('flex');
+            btn.classList.toggle('bg-gray-700', !isHidden);
+            btn.classList.toggle('bg-green-700', isHidden);
+            if (isHidden) document.getElementById('auto-input').focus();
+        }
+
+        hiddenInput.addEventListener('input', (e) => {
+            const txt = e.data || hiddenInput.value;
+            if (txt) {
+                emit('command:type', { text: txt });
+            }
+            hiddenInput.value = '';
+        });
+
+        hiddenInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Backspace' || e.keyCode === 8) {
+                emit('command:key', { key: 'backspace' });
+            } else if (e.key === 'Enter' || e.keyCode === 13) {
+                e.preventDefault();
+                emit('command:key', { key: 'enter' });
+            }
+        });
+
+        document.getElementById('kb-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            emit('command:key', { key: 'enter' });
+            setTimeout(() => {
+                emit('command:key', { key: 'enter' });
+            }, 100);
+            hiddenInput.blur();
+        });
+
+        // --- REALTIME TYPING & AUTO TYPER ---
+        let lastLength = 0;
+        const visibleInput = document.getElementById('clip-input');
+
+        visibleInput.addEventListener('input', (e) => {
+            const currentVal = visibleInput.value;
+            const currentLen = currentVal.length;
+
+            if (currentLen > lastLength) {
+                const addedText = currentVal.substring(lastLength);
+                emit('command:type', { text: addedText });
+            } else if (currentLen < lastLength) {
+                const diff = lastLength - currentLen;
+                for (let i = 0; i < diff; i++) {
+                    emit('command:key', { key: 'backspace' });
+                }
+            }
+            lastLength = currentLen;
+        });
+
+        visibleInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                emit('command:key', { key: 'enter' });
+            }
+        });
+
+        function clearTypeBox() {
+            visibleInput.value = '';
+            lastLength = 0;
+        }
+
+        // --- AUTO TYPER LOGIC ---
+        let autoTypeInterval = null;
+        let autoTypeIndex = 0;
+        let autoTypeText = '';
+        let typingSpeed = 50;
+        const autoInput = document.getElementById('auto-input');
+        const speedLabel = document.getElementById('speed-label');
+
+        function adjustSpeed(direction) {
+            if (direction > 0) {
+                typingSpeed = Math.max(10, typingSpeed - 10);
+            } else {
+                typingSpeed = Math.min(200, typingSpeed + 10);
+            }
+            speedLabel.innerText = typingSpeed + 'ms';
+
+            if (autoTypeInterval) {
+                runAutoTypeLoop();
+            }
+        }
+
+        function startAutoType() {
+            autoTypeText = autoInput.value;
+            if (!autoTypeText) return;
+            autoTypeIndex = 0;
+            runAutoTypeLoop();
+        }
+
+        function runAutoTypeLoop() {
+            if (autoTypeInterval) {
+                clearInterval(autoTypeInterval);
+            }
+            autoTypeInterval = setInterval(() => {
+                if (autoTypeIndex < autoTypeText.length) {
+                    const char = autoTypeText[autoTypeIndex];
+                    emit('command:type', { text: char });
+                    autoTypeIndex++;
+                } else {
+                    clearInterval(autoTypeInterval);
+                    autoTypeInterval = null;
+                }
+            }, typingSpeed);
+        }
+
+        function sendBlindUnlock() {
+            const pass = document.getElementById('unlock-pass').value;
+            if (pass) {
+                emit('command:type', { text: pass });
+            }
+            document.getElementById('unlock-pass').value = '';
+
+            setTimeout(() => {
+                emit('command:key', { key: 'enter' });
+                if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+            }, 300);
+        }
+
+        // ---- MOUSE MODE ----
+        let mouseModeActive = false;
+        let lastMouseEmit = 0;
+        const MOUSE_THROTTLE_MS = 16; // ~60fps max
+
+        function toggleMouseMode() {
+            mouseModeActive = !mouseModeActive;
+            const btn = document.getElementById('mouse-btn');
+            const label = document.getElementById('mouse-label');
+            const touchLayer = document.getElementById('touch-layer');
+            if (mouseModeActive) {
+                btn.classList.remove('bg-gray-700');
+                btn.classList.add('bg-green-700');
+                label.textContent = 'ON';
+                touchLayer.style.cursor = 'crosshair';
+            } else {
+                btn.classList.remove('bg-green-700');
+                btn.classList.add('bg-gray-700');
+                label.textContent = 'MOUSE';
+                touchLayer.style.cursor = '';
+            }
+        }
+
+        // Mouse move → move remote cursor
+        document.getElementById('touch-layer').addEventListener('mousemove', (e) => {
+            if (!mouseModeActive) return;
+            const now = Date.now();
+            if (now - lastMouseEmit < MOUSE_THROTTLE_MS) return;
+            lastMouseEmit = now;
+            const rect = e.currentTarget.getBoundingClientRect();
+            const x = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+            const y = Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height));
+            emit('command:move-mouse', { x, y });
+        });
+
+        // Mouse left-click → remote left click
+        document.getElementById('touch-layer').addEventListener('click', (e) => {
+            if (!mouseModeActive) return;
+            const rect = e.currentTarget.getBoundingClientRect();
+            const x = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+            const y = Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height));
+            emit('command:click', { x, y, button: 'left' });
+        });
+
+        // Mouse right-click → remote right click
+        document.getElementById('touch-layer').addEventListener('contextmenu', (e) => {
+            if (!mouseModeActive) return;
+            e.preventDefault();
+            const rect = e.currentTarget.getBoundingClientRect();
+            const x = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+            const y = Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height));
+            emit('command:click', { x, y, button: 'right' });
+        });
+
+        // Scroll wheel → remote scroll
+        document.getElementById('touch-layer').addEventListener('wheel', (e) => {
+            if (!mouseModeActive) return;
+            e.preventDefault();
+            const delta = e.deltaY > 0 ? -3 : 3;
+            emit('command:scroll', { delta });
+        }, { passive: false });
+
+    </script>
+
+    <!-- SECURITY OVERLAY -->
+    <div id="approval-overlay"
+        class="hidden absolute inset-0 z-50 bg-black/90 flex flex-col items-center justify-center p-8 text-center backdrop-blur-md">
+        <div class="text-4xl animate-bounce mb-4">🔐</div>
+        <h2 class="text-white text-xl font-bold">Security Check</h2>
+        <p class="text-gray-400 text-sm mt-2">Please check your PC to approve this device.</p>
+    </div>
+</body>
+
+</html>
