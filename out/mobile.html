@@ -742,13 +742,34 @@
         let lastLength = 0;
         const visibleInput = document.getElementById('clip-input');
 
+        visibleInput.addEventListener('paste', (e) => {
+            // When pasting multiline/formatted text into realtime box → use clipboard
+            // so indentation, newlines, and special chars are preserved exactly
+            const pastedText = e.clipboardData ? e.clipboardData.getData('text') : '';
+            if (pastedText && pastedText.includes('\n') || pastedText.includes('\t')) {
+                e.preventDefault();
+                emit('command:clipboard-set', { text: pastedText, paste: true });
+                return;
+            }
+            // Single-line pastes go through normally (handled by input event below)
+        });
+
         visibleInput.addEventListener('input', (e) => {
             const currentVal = visibleInput.value;
             const currentLen = currentVal.length;
 
             if (currentLen > lastLength) {
                 const addedText = currentVal.substring(lastLength);
-                emit('command:type', { text: addedText });
+                // Split on newlines — send proper Enter key instead of \n unicode char
+                if (addedText.includes('\n')) {
+                    const lines = addedText.split('\n');
+                    lines.forEach((line, idx) => {
+                        if (line) emit('command:type', { text: line });
+                        if (idx < lines.length - 1) emit('command:key', { key: 'enter' });
+                    });
+                } else {
+                    emit('command:type', { text: addedText });
+                }
             } else if (currentLen < lastLength) {
                 const diff = lastLength - currentLen;
                 for (let i = 0; i < diff; i++) {
@@ -962,16 +983,16 @@
             }
         }
 
-        // NORMAL: directly type the text on PC via SendInput — no clipboard used
+        // NORMAL: set PC clipboard to textarea text → Ctrl+V → exact paste with formatting
         function doNormalPaste() {
             const text = document.getElementById('paste-normal-input').value;
             if (!text) { alert('Nothing to paste. Type or paste text into the box first.'); return; }
             if (!socket || !socket.connected) { alert('Not connected to PC.'); return; }
-            // Directly types via Windows SendInput API — PC clipboard is NOT touched
-            emit('command:type', { text: text });
+            // Use clipboard → Ctrl+V: preserves ALL formatting, indentation, newlines, special chars
+            emit('command:clipboard-set', { text: text, paste: true });
             const btn = document.querySelector('#paste-normal-panel button');
             const orig = btn.innerHTML;
-            btn.innerHTML = '✅ SENT!';
+            btn.innerHTML = '✅ PASTED!';
             btn.disabled = true;
             setTimeout(() => { btn.innerHTML = orig; btn.disabled = false; }, 1500);
         }
