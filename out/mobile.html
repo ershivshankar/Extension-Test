@@ -175,6 +175,8 @@
                     class="p-2 bg-gray-700 rounded text-white text-[10px] w-12 flex flex-col items-center"><span>🎤</span><span>MIC</span></button>
                 <button onclick="toggleMouseMode()" id="mouse-btn"
                     class="p-2 bg-gray-700 rounded text-white text-[10px] w-12 flex flex-col items-center"><span>🖱️</span><span id="mouse-label">MOUSE</span></button>
+                <button onclick="togglePastePanel()" id="paste-mode-btn"
+                    class="p-2 bg-gray-700 rounded text-white text-[10px] w-12 flex flex-col items-center"><span>📋</span><span>PASTE</span></button>
             </div>
 
             <!-- Media Controls (Volume Down / Up) -->
@@ -207,6 +209,52 @@
             <span id="speed-label" class="text-[10px] text-gray-400 font-mono w-10 text-center">50ms</span>
             <button onclick="adjustSpeed(1)"
                 class="p-2 bg-gray-800 text-gray-300 rounded text-[10px] font-bold active:bg-gray-700">SPEED +</button>
+        </div>
+
+        </div>
+
+        <!-- PASTE PANEL (collapsed by default) -->
+        <div id="paste-panel" class="hidden flex-col bg-gray-900 p-2 rounded-lg gap-2">
+            <!-- Submode Tabs -->
+            <div class="flex gap-2">
+                <button onclick="selectPasteMode('normal')" id="paste-tab-normal"
+                    class="flex-1 py-1 rounded text-[11px] font-bold bg-blue-700 text-white">NORMAL</button>
+                <button onclick="selectPasteMode('realtime')" id="paste-tab-realtime"
+                    class="flex-1 py-1 rounded text-[11px] font-bold bg-gray-700 text-gray-300">REALTIME</button>
+            </div>
+
+            <!-- NORMAL submode -->
+            <div id="paste-normal-panel" class="flex flex-col gap-2">
+                <textarea id="paste-normal-input" rows="3"
+                    placeholder="Text to paste instantly on PC..."
+                    class="bg-gray-800 text-white text-xs p-2 rounded resize-none focus:outline-none focus:ring-1 focus:ring-blue-500 font-mono"></textarea>
+                <div class="flex gap-2">
+                    <button onclick="doNormalPaste()"
+                        class="flex-1 py-2 bg-blue-700 text-white rounded text-xs font-bold active:bg-blue-600">📋 PASTE &amp; SEND</button>
+                    <button onclick="readClipboardToNormal()"
+                        class="py-2 px-3 bg-gray-700 text-gray-300 rounded text-xs font-bold active:bg-gray-600">FROM CLIPBOARD</button>
+                </div>
+            </div>
+
+            <!-- REALTIME submode -->
+            <div id="paste-realtime-panel" class="hidden flex-col gap-2">
+                <textarea id="paste-realtime-input" rows="3"
+                    placeholder="Text to type character-by-character on PC..."
+                    class="bg-gray-800 text-white text-xs p-2 rounded resize-none focus:outline-none focus:ring-1 focus:ring-blue-500 font-mono"></textarea>
+                <div class="flex gap-2 items-center">
+                    <button id="rt-start-stop-btn" onclick="rtStartStop()"
+                        class="flex-1 py-2 bg-green-700 text-white rounded text-xs font-bold active:bg-green-600">START</button>
+                    <button onclick="readClipboardToRealtime()"
+                        class="py-2 px-3 bg-gray-700 text-gray-300 rounded text-xs font-bold active:bg-gray-600">FROM CLIPBOARD</button>
+                    <select id="rt-speed-select" onchange="updateRtSpeed()"
+                        class="bg-gray-800 text-gray-300 text-xs rounded p-1">
+                        <option value="200">Slow</option>
+                        <option value="80" selected>Normal</option>
+                        <option value="30">Fast</option>
+                        <option value="10">Turbo</option>
+                    </select>
+                </div>
+            </div>
         </div>
 
         <!-- TOUCH AREA (SCREEN) with Waiting Message -->
@@ -844,6 +892,162 @@
             const delta = e.deltaY > 0 ? -3 : 3;
             emit('command:scroll', { delta });
         }, { passive: false });
+
+        // ── PASTE PANEL ───────────────────────────────────────────────────────
+        let currentPasteMode = 'normal';
+        let rtIsActive       = false;
+        let rtIsPaused       = false;
+        let rtIntervalId     = null;
+        let rtClipboardText  = '';
+        let rtCurrentIndex   = 0;
+
+        function togglePastePanel() {
+            const panel = document.getElementById('paste-panel');
+            const btn   = document.getElementById('paste-mode-btn');
+            const isHidden = panel.classList.contains('hidden');
+
+            // Close other panels first
+            closePanelSafe('realtime-panel', 'rt-btn');
+            closePanelSafe('auto-panel', 'auto-btn');
+            const kbDrawer = document.getElementById('keyboard-drawer');
+            if (kbDrawer) { kbDrawer.classList.add('hidden'); kbDrawer.classList.remove('flex'); }
+
+            if (isHidden) {
+                panel.classList.remove('hidden');
+                panel.classList.add('flex');
+                btn.classList.remove('bg-gray-700');
+                btn.classList.add('bg-purple-700');
+            } else {
+                panel.classList.add('hidden');
+                panel.classList.remove('flex');
+                btn.classList.remove('bg-purple-700');
+                btn.classList.add('bg-gray-700');
+                pauseRealtimePaste();
+            }
+        }
+
+        function closePanelSafe(panelId, btnId) {
+            const p = document.getElementById(panelId);
+            const b = document.getElementById(btnId);
+            if (p) { p.classList.add('hidden'); p.classList.remove('flex'); }
+            if (b) { b.classList.remove('bg-green-700'); b.classList.add('bg-gray-700'); }
+        }
+
+        function selectPasteMode(mode) {
+            currentPasteMode = mode;
+            const normalPanel = document.getElementById('paste-normal-panel');
+            const rtPanel     = document.getElementById('paste-realtime-panel');
+            const tabNormal   = document.getElementById('paste-tab-normal');
+            const tabRt       = document.getElementById('paste-tab-realtime');
+
+            if (mode === 'normal') {
+                normalPanel.classList.remove('hidden'); normalPanel.classList.add('flex');
+                rtPanel.classList.add('hidden');        rtPanel.classList.remove('flex');
+                tabNormal.classList.remove('bg-gray-700', 'text-gray-300');
+                tabNormal.classList.add('bg-blue-700', 'text-white');
+                tabRt.classList.remove('bg-blue-700', 'text-white');
+                tabRt.classList.add('bg-gray-700', 'text-gray-300');
+                pauseRealtimePaste();
+            } else {
+                rtPanel.classList.remove('hidden');    rtPanel.classList.add('flex');
+                normalPanel.classList.add('hidden');   normalPanel.classList.remove('flex');
+                tabRt.classList.remove('bg-gray-700', 'text-gray-300');
+                tabRt.classList.add('bg-blue-700', 'text-white');
+                tabNormal.classList.remove('bg-blue-700', 'text-white');
+                tabNormal.classList.add('bg-gray-700', 'text-gray-300');
+            }
+        }
+
+        async function readClipboardToNormal() {
+            try {
+                const text = await navigator.clipboard.readText();
+                document.getElementById('paste-normal-input').value = text;
+            } catch(e) {
+                alert('Clipboard permission denied. Paste manually into the box.');
+            }
+        }
+
+        // NORMAL: send full text to PC clipboard then Ctrl+V
+        function doNormalPaste() {
+            const text = document.getElementById('paste-normal-input').value;
+            if (!text) { alert('Nothing to paste. Type or paste text into the box first.'); return; }
+            if (!socket || !socket.connected) { alert('Not connected to PC.'); return; }
+            emit('command:clipboard-set', { text: text, paste: false });
+            setTimeout(() => { emit('command:key', { key: 'paste' }); }, 300);
+            const btn = document.querySelector('#paste-normal-panel button');
+            const orig = btn.innerHTML;
+            btn.innerHTML = '✅ SENT!';
+            btn.disabled = true;
+            setTimeout(() => { btn.innerHTML = orig; btn.disabled = false; }, 1500);
+        }
+
+        async function readClipboardToRealtime() {
+            try {
+                const text = await navigator.clipboard.readText();
+                document.getElementById('paste-realtime-input').value = text;
+            } catch(e) {
+                alert('Clipboard permission denied. Paste manually into the box.');
+            }
+        }
+
+        function rtStartStop() {
+            if (rtIsActive && !rtIsPaused) { pauseRealtimePaste(); }
+            else { startOrResumeRealtimePaste(); }
+        }
+
+        function updateRtSpeed() {
+            if (rtIsActive && !rtIsPaused && rtIntervalId) {
+                const spd = parseInt(document.getElementById('rt-speed-select').value, 10);
+                clearInterval(rtIntervalId);
+                rtIntervalId = setInterval(rtTick, spd);
+            }
+        }
+
+        function startOrResumeRealtimePaste() {
+            if (!socket || !socket.connected) { alert('Not connected to PC.'); return; }
+            if (!rtIsActive) {
+                const text = document.getElementById('paste-realtime-input').value;
+                if (!text) { alert('Nothing to type.'); return; }
+                rtClipboardText = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+                rtCurrentIndex  = 0;
+            }
+            rtIsActive = true;
+            rtIsPaused = false;
+            const btn = document.getElementById('rt-start-stop-btn');
+            btn.textContent = 'STOP';
+            btn.classList.replace('bg-green-700', 'bg-red-700');
+            const spd = parseInt(document.getElementById('rt-speed-select').value, 10);
+            if (rtIntervalId) clearInterval(rtIntervalId);
+            rtIntervalId = setInterval(rtTick, spd);
+        }
+
+        function pauseRealtimePaste() {
+            if (!rtIsActive) return;
+            rtIsPaused = true;
+            if (rtIntervalId) { clearInterval(rtIntervalId); rtIntervalId = null; }
+            const btn = document.getElementById('rt-start-stop-btn');
+            if (btn) { btn.textContent = 'START'; btn.classList.replace('bg-red-700', 'bg-green-700'); }
+        }
+
+        // One tick = one character typed on the PC
+        function rtTick() {
+            // skip \r
+            while (rtCurrentIndex < rtClipboardText.length && rtClipboardText[rtCurrentIndex] === '\r') {
+                rtCurrentIndex++;
+            }
+            if (rtCurrentIndex >= rtClipboardText.length) {
+                pauseRealtimePaste();
+                rtIsActive = false;
+                rtCurrentIndex = 0;
+                return;
+            }
+            const ch = rtClipboardText[rtCurrentIndex++];
+            if (ch === '\n') {
+                emit('command:key', { key: 'enter' });
+            } else {
+                emit('command:type', { text: ch });
+            }
+        }
 
     </script>
 
