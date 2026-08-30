@@ -222,8 +222,8 @@
             <!-- Connecting Spinner (Initial) -->
             <div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-10"
                 id="waiting-msg">
-                <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-white mb-2"></div>
-                <span class="text-white text-lg font-bold shadow-black drop-shadow-md">Connecting Video...</span>
+                <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-white mb-2" id="waiting-spinner"></div>
+                <span id="waiting-text" class="text-white text-lg font-bold shadow-black drop-shadow-md">Waiting for PC...</span>
             </div>
 
             <!-- LOCK SCREEN / NO SIGNAL OVERLAY -->
@@ -418,14 +418,16 @@
                 const token = document.getElementById('token-input').value;
                 if (token) localStorage.setItem('jarvis_token', token);
 
+                // Don't hide waiting-msg yet — wait for extension to connect
+                document.getElementById('waiting-text').innerText = 'Waiting for PC Extension...';
                 document.getElementById('approval-overlay').classList.add('hidden');
+                document.getElementById('pin-overlay').classList.add('hidden');
+                document.getElementById('pin-overlay').classList.remove('flex');
             });
 
-            socket.on('mic:data', (data) => {
-                if (!isMicOn) return;
-                if (data.chunk) {
-                    playAudioChunk(data.chunk);
-                }
+            socket.on('desktop-connected', (data) => {
+                // PC extension just joined the session!
+                document.getElementById('waiting-text').innerText = 'PC Connected! Loading screen...';
             });
 
             socket.on('peek:data', (data) => {
@@ -433,6 +435,7 @@
                 if (data.image) {
                     img.style.objectFit = 'contain';
                     img.src = data.image;
+                    // Only hide waiting-msg when ACTUAL screenshot arrives
                     document.getElementById('waiting-msg').style.display = 'none';
                 }
             });
@@ -447,6 +450,16 @@
                 }
             });
 
+            socket.on('disconnect', () => {
+                document.getElementById('waiting-msg').style.display = 'flex';
+                document.getElementById('waiting-text').innerText = 'Disconnected. Reconnecting...';
+            });
+
+            socket.on('mic:data', (data) => {
+                if (!isMicOn) return;
+                if (data.chunk) { playAudioChunk(data.chunk); }
+            });
+
             socket.on('clipboard:data', (data) => {
                 if (data.text) {
                     document.getElementById('clip-input').value = data.text;
@@ -455,7 +468,6 @@
             });
 
             socket.on('auth:required', () => {
-                console.log("🔒 Authentication Required: PIN");
                 document.getElementById('pin-overlay').classList.remove('hidden');
                 document.getElementById('pin-overlay').classList.add('flex');
             });
@@ -463,20 +475,6 @@
             socket.on('auth:failed', () => {
                 alert("Incorrect PIN");
                 document.getElementById('pin-entry').value = '';
-            });
-
-            socket.on('connection:approved', () => {
-                console.log("✅ Connection Approved!");
-                document.getElementById('waiting-msg').style.display = 'none';
-                document.getElementById('lock-overlay').classList.add('hidden');
-                document.getElementById('pin-overlay').classList.add('hidden');
-                document.getElementById('pin-overlay').classList.remove('flex');
-                startStream();
-            });
-
-            socket.on('disconnect', () => {
-                document.getElementById('waiting-msg').style.display = 'flex';
-                document.getElementById('waiting-msg').querySelector('span').innerText = "Disconnected";
             });
         }
 
