@@ -740,11 +740,11 @@
 
         // --- REALTIME TYPING & AUTO TYPER ---
         let lastLength = 0;
-        let atLineStart = false;  // After Enter is sent, next chars' leading whitespace is stripped
+        let atLineStart = false;  // Strip leading whitespace on next input
+        let enterKeyPending = false;  // keydown already sent Enter — don't send again in input
         const visibleInput = document.getElementById('clip-input');
 
         visibleInput.addEventListener('paste', (e) => {
-            // Pasting multiline/tabbed content → use clipboard for exact formatting
             const pastedText = e.clipboardData ? e.clipboardData.getData('text') : '';
             if (pastedText && (pastedText.includes('\n') || pastedText.includes('\t'))) {
                 e.preventDefault();
@@ -761,26 +761,28 @@
                 let addedText = currentVal.substring(lastLength);
 
                 if (addedText.includes('\n')) {
-                    // Multiline chunk — split and send Enter keys between lines
                     const lines = addedText.split('\n');
                     lines.forEach((line, idx) => {
-                        // Strip leading whitespace on lines after an Enter
-                        // because code editor already auto-indented
-                        const strippedLine = (idx === 0 && atLineStart)
-                            ? line.replace(/^[ \t]+/, '')
-                            : (idx > 0 ? line.replace(/^[ \t]+/, '') : line);
-                        if (strippedLine) emit('command:type', { text: strippedLine });
+                        // Strip leading whitespace on any line that follows an Enter,
+                        // because the code editor already auto-indented the cursor there
+                        const shouldStrip = (idx === 0 && atLineStart) || idx > 0;
+                        const content = shouldStrip ? line.replace(/^[ \t]+/, '') : line;
+                        if (content) emit('command:type', { text: content });
+
                         if (idx < lines.length - 1) {
-                            emit('command:key', { key: 'enter' });
-                            atLineStart = true;
+                            // Only send Enter if keydown didn't already send it for this newline
+                            if (!enterKeyPending || idx > 0) {
+                                emit('command:key', { key: 'enter' });
+                            }
+                            enterKeyPending = false;
+                            atLineStart = true; // Keep true — next event strips whitespace
                         }
                     });
-                    atLineStart = false;
+                    // Do NOT reset atLineStart here — next input event must also strip
                 } else {
                     if (atLineStart) {
-                        // Strip leading whitespace — editor already auto-indented
                         addedText = addedText.replace(/^[ \t]+/, '');
-                        if (addedText) atLineStart = false;
+                        if (addedText) atLineStart = false; // Got real content, stop stripping
                     }
                     if (addedText) emit('command:type', { text: addedText });
                 }
@@ -790,13 +792,15 @@
                     emit('command:key', { key: 'backspace' });
                 }
                 atLineStart = false;
+                enterKeyPending = false;
             }
             lastLength = currentLen;
         });
 
         visibleInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
-                atLineStart = true;  // Next input: strip leading whitespace
+                atLineStart = true;
+                enterKeyPending = true; // Flag: input handler must NOT send another Enter
                 emit('command:key', { key: 'enter' });
             }
         });
@@ -805,6 +809,7 @@
             visibleInput.value = '';
             lastLength = 0;
             atLineStart = false;
+            enterKeyPending = false;
         }
 
         // --- AUTO TYPER LOGIC ---
