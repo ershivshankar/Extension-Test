@@ -263,9 +263,29 @@ app.post('/api/auth/verify-token', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Token is required.' });
     }
 
-    // If MongoDB not connected — block all (no bypass)
-    if (mongoose.connection.readyState !== 1) {
-      return res.status(503).json({ success: false, error: 'Server database not ready. Try again later.' });
+    // ── Wait for MongoDB to be ready (handles cold-start race condition) ──────
+    // On free Render, server boots fast but MongoDB connects ~2-4s later.
+    // We retry for up to 6 seconds before giving up.
+    const waitForDB = () => new Promise((resolve) => {
+      if (mongoose.connection.readyState === 1) return resolve(true);
+      let attempts = 0;
+      const interval = setInterval(() => {
+        attempts++;
+        if (mongoose.connection.readyState === 1) {
+          clearInterval(interval);
+          resolve(true);
+        } else if (attempts >= 12) { // 12 x 500ms = 6 seconds
+          clearInterval(interval);
+          resolve(false);
+        }
+      }, 500);
+    });
+
+    const dbReady = await waitForDB();
+
+    if (!dbReady) {
+      console.warn('[verify-token] MongoDB not ready after 6s — rejecting');
+      return res.status(503).json({ success: false, error: 'Server is starting up. Please try again in a few seconds.' });
     }
 
     const AccessToken = require('./models/AccessToken');
