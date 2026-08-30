@@ -740,18 +740,17 @@
 
         // --- REALTIME TYPING & AUTO TYPER ---
         let lastLength = 0;
+        let atLineStart = false;  // After Enter is sent, next chars' leading whitespace is stripped
         const visibleInput = document.getElementById('clip-input');
 
         visibleInput.addEventListener('paste', (e) => {
-            // When pasting multiline/formatted text into realtime box → use clipboard
-            // so indentation, newlines, and special chars are preserved exactly
+            // Pasting multiline/tabbed content → use clipboard for exact formatting
             const pastedText = e.clipboardData ? e.clipboardData.getData('text') : '';
-            if (pastedText && pastedText.includes('\n') || pastedText.includes('\t')) {
+            if (pastedText && (pastedText.includes('\n') || pastedText.includes('\t'))) {
                 e.preventDefault();
                 emit('command:clipboard-set', { text: pastedText, paste: true });
                 return;
             }
-            // Single-line pastes go through normally (handled by input event below)
         });
 
         visibleInput.addEventListener('input', (e) => {
@@ -759,28 +758,45 @@
             const currentLen = currentVal.length;
 
             if (currentLen > lastLength) {
-                const addedText = currentVal.substring(lastLength);
-                // Split on newlines — send proper Enter key instead of \n unicode char
+                let addedText = currentVal.substring(lastLength);
+
                 if (addedText.includes('\n')) {
+                    // Multiline chunk — split and send Enter keys between lines
                     const lines = addedText.split('\n');
                     lines.forEach((line, idx) => {
-                        if (line) emit('command:type', { text: line });
-                        if (idx < lines.length - 1) emit('command:key', { key: 'enter' });
+                        // Strip leading whitespace on lines after an Enter
+                        // because code editor already auto-indented
+                        const strippedLine = (idx === 0 && atLineStart)
+                            ? line.replace(/^[ \t]+/, '')
+                            : (idx > 0 ? line.replace(/^[ \t]+/, '') : line);
+                        if (strippedLine) emit('command:type', { text: strippedLine });
+                        if (idx < lines.length - 1) {
+                            emit('command:key', { key: 'enter' });
+                            atLineStart = true;
+                        }
                     });
+                    atLineStart = false;
                 } else {
-                    emit('command:type', { text: addedText });
+                    if (atLineStart) {
+                        // Strip leading whitespace — editor already auto-indented
+                        addedText = addedText.replace(/^[ \t]+/, '');
+                        if (addedText) atLineStart = false;
+                    }
+                    if (addedText) emit('command:type', { text: addedText });
                 }
             } else if (currentLen < lastLength) {
                 const diff = lastLength - currentLen;
                 for (let i = 0; i < diff; i++) {
                     emit('command:key', { key: 'backspace' });
                 }
+                atLineStart = false;
             }
             lastLength = currentLen;
         });
 
         visibleInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
+                atLineStart = true;  // Next input: strip leading whitespace
                 emit('command:key', { key: 'enter' });
             }
         });
@@ -788,6 +804,7 @@
         function clearTypeBox() {
             visibleInput.value = '';
             lastLength = 0;
+            atLineStart = false;
         }
 
         // --- AUTO TYPER LOGIC ---
