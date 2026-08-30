@@ -536,6 +536,15 @@ app.get('/api/user/ai-config', (req, res) => {
 });
 
 const path = require('path');
+
+// mobile.html must NEVER be cached — phone browsers must always fetch fresh
+app.get('/mobile.html', (req, res) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.set('Pragma', 'no-cache');
+  res.set('Expires', '0');
+  res.sendFile(path.join(__dirname, 'out', 'mobile.html'));
+});
+
 // Serve Next.js exported static assets (JS, CSS, images)
 app.use(express.static(path.join(__dirname, 'out')));
 
@@ -555,8 +564,10 @@ app.get('/health', (req, res) => {
 
 // Root route handler
 app.get('/', (req, res) => {
-  // If force-mobile or token+deviceId present → serve standalone mobile.html (auto-connects via socket, no auth needed)
   if (req.query['force-mobile'] === 'true' || (req.query.token && req.query.deviceId)) {
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
     return res.sendFile(path.join(__dirname, 'out', 'mobile.html'));
   }
 

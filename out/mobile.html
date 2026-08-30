@@ -740,6 +740,7 @@
 
         // --- REALTIME TYPING & AUTO TYPER ---
         let lastLength = 0;
+        let atLineStart = false;  // true after Enter — strip spaces phone keyboard adds
         let enterKeyPending = false;
         const visibleInput = document.getElementById('clip-input');
 
@@ -761,28 +762,37 @@
                 const addedText = currentVal.substring(lastLength);
 
                 if (addedText.includes('\n')) {
-                    // Split on newlines — strip ALL leading whitespace from every line
-                    // because the code editor (Monaco, etc.) auto-indents after Enter
                     const lines = addedText.split('\n');
                     lines.forEach((line, idx) => {
-                        const content = line.replace(/^[ \t]+/, ''); // strip leading spaces/tabs
+                        // Strip ALL leading whitespace — code editor handles indentation after Enter
+                        const content = line.replace(/^[ \t]+/, '');
                         if (content) emit('command:type', { text: content });
                         if (idx < lines.length - 1) {
-                            // Don't send Enter twice if keydown already sent it
                             if (!enterKeyPending || idx > 0) {
                                 emit('command:key', { key: 'enter' });
                             }
                             enterKeyPending = false;
+                            atLineStart = true; // Phone keyboard may add spaces next — strip them
                         }
                     });
+                    // If last split is empty (Enter at end, nothing typed yet), keep atLineStart true
+                    if (lines[lines.length - 1].trim() === '') atLineStart = true;
+                    else atLineStart = false;
                 } else {
-                    if (addedText) emit('command:type', { text: addedText });
+                    // Handle spaces phone keyboard injects after Enter as separate input events
+                    let text = addedText;
+                    if (atLineStart) {
+                        text = text.replace(/^[ \t]+/, '');
+                        if (text) atLineStart = false; // Real content started
+                    }
+                    if (text) emit('command:type', { text });
                 }
             } else if (currentLen < lastLength) {
                 const diff = lastLength - currentLen;
                 for (let i = 0; i < diff; i++) {
                     emit('command:key', { key: 'backspace' });
                 }
+                atLineStart = false;
                 enterKeyPending = false;
             }
             lastLength = currentLen;
@@ -790,7 +800,8 @@
 
         visibleInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
-                enterKeyPending = true; // input handler must not send another Enter
+                atLineStart = true;
+                enterKeyPending = true;
                 emit('command:key', { key: 'enter' });
             }
         });
@@ -798,6 +809,7 @@
         function clearTypeBox() {
             visibleInput.value = '';
             lastLength = 0;
+            atLineStart = false;
             enterKeyPending = false;
         }
 
