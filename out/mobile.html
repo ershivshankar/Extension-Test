@@ -655,13 +655,10 @@
         touchLayer.addEventListener('touchend', (e) => {
             if (!isDrag && e.changedTouches.length > 0) {
                 e.preventDefault();
-
                 const touch = e.changedTouches[0];
                 const coords = getMappedCoords(touch);
-
-                emit('command:move-mouse', { x: coords.x, y: coords.y, mode: 'pct' });
-                emit('command:click', { button: 'left' });
-
+                // Send one click event WITH coordinates — native host moves cursor then clicks atomically
+                emit('command:click', { x: coords.x, y: coords.y, button: 'left' });
                 showRipple(touch.clientX, touch.clientY);
             }
         });
