@@ -382,7 +382,7 @@
             }
 
             const urlParams = new URLSearchParams(window.location.search);
-            const relayUrl = urlParams.get('relay') || 'https://jarvis-relay-hub-production.up.railway.app';
+            const relayUrl = urlParams.get('relay') || 'https://extension-test-k9cc.onrender.com';
 
             socket = io(relayUrl, {
                 auth: authData,
