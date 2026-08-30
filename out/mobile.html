@@ -764,35 +764,34 @@
                 if (addedText.includes('\n')) {
                     const lines = addedText.split('\n');
                     lines.forEach((line, idx) => {
-                        // Strip ALL leading whitespace — code editor handles indentation after Enter
-                        const content = line.replace(/^[ \t]+/, '');
-                        if (content) emit('command:type', { text: content });
-                        if (idx < lines.length - 1) {
-                            if (!enterKeyPending || idx > 0) {
+                        if (idx > 0) {
+                            // This is a new line in the block:
+                            // 1. Send Enter key
+                            if (!enterKeyPending || idx > 1) {
                                 emit('command:key', { key: 'enter' });
                             }
                             enterKeyPending = false;
-                            atLineStart = true; // Phone keyboard may add spaces next — strip them
+                            
+                            // 2. Select and delete any auto-indentation the editor inserted
+                            emit('command:key', { key: 'shift-home' });
+                            emit('command:key', { key: 'backspace' });
+                        }
+                        
+                        // 3. Type the line exactly (with all its spaces)
+                        if (line) {
+                            emit('command:type', { text: line });
                         }
                     });
-                    // If last split is empty (Enter at end, nothing typed yet), keep atLineStart true
-                    if (lines[lines.length - 1].trim() === '') atLineStart = true;
-                    else atLineStart = false;
                 } else {
-                    // Handle spaces phone keyboard injects after Enter as separate input events
-                    let text = addedText;
-                    if (atLineStart) {
-                        text = text.replace(/^[ \t]+/, '');
-                        if (text) atLineStart = false; // Real content started
+                    if (addedText) {
+                        emit('command:type', { text: addedText });
                     }
-                    if (text) emit('command:type', { text });
                 }
             } else if (currentLen < lastLength) {
                 const diff = lastLength - currentLen;
                 for (let i = 0; i < diff; i++) {
                     emit('command:key', { key: 'backspace' });
                 }
-                atLineStart = false;
                 enterKeyPending = false;
             }
             lastLength = currentLen;
@@ -800,7 +799,6 @@
 
         visibleInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
-                atLineStart = true;
                 enterKeyPending = true;
                 emit('command:key', { key: 'enter' });
             }
@@ -809,7 +807,6 @@
         function clearTypeBox() {
             visibleInput.value = '';
             lastLength = 0;
-            atLineStart = false;
             enterKeyPending = false;
         }
 
