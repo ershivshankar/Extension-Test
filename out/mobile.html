@@ -762,26 +762,13 @@
                 const addedText = currentVal.substring(lastLength);
 
                 if (addedText.includes('\n')) {
-                    const lines = addedText.split('\n');
-                    lines.forEach((line, idx) => {
-                        if (idx > 0) {
-                            // This is a new line in the block:
-                            // 1. Send Enter key
-                            if (!enterKeyPending || idx > 1) {
-                                emit('command:key', { key: 'enter' });
-                            }
-                            enterKeyPending = false;
-                            
-                            // 2. Select and delete any auto-indentation the editor inserted
-                            emit('command:key', { key: 'shift-home' });
-                            emit('command:key', { key: 'backspace' });
-                        }
-                        
-                        // 3. Type the line exactly (with all its spaces)
-                        if (line) {
-                            emit('command:type', { text: line });
-                        }
-                    });
+                    const cleanText = addedText.replace(/\r/g, '');
+                    if (cleanText === '\n') {
+                        // User pressed Enter. Keydown listener handles this.
+                    } else {
+                        // Multiline text block: paste it via clipboard to preserve exact formatting
+                        emit('command:clipboard-set', { text: addedText, paste: true });
+                    }
                 } else {
                     if (addedText) {
                         emit('command:type', { text: addedText });
@@ -792,14 +779,12 @@
                 for (let i = 0; i < diff; i++) {
                     emit('command:key', { key: 'backspace' });
                 }
-                enterKeyPending = false;
             }
             lastLength = currentLen;
         });
 
         visibleInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
-                enterKeyPending = true;
                 emit('command:key', { key: 'enter' });
             }
         });
@@ -807,7 +792,6 @@
         function clearTypeBox() {
             visibleInput.value = '';
             lastLength = 0;
-            enterKeyPending = false;
         }
 
         // --- AUTO TYPER LOGIC ---
