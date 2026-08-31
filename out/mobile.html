@@ -744,12 +744,25 @@
         let enterKeyPending = false;
         const visibleInput = document.getElementById('clip-input');
 
+        // Helper function: if a line has > 4 leading spaces/tabs, strip all of them
+        function formatLineSpaces(line) {
+            const match = line.match(/^([ \t]+)/);
+            if (match && match[1].length > 4) {
+                return line.replace(/^[ \t]+/, '');
+            }
+            return line;
+        }
+
         // Paste into realtime box → use clipboard for exact formatting
         visibleInput.addEventListener('paste', (e) => {
             const pastedText = e.clipboardData ? e.clipboardData.getData('text') : '';
             if (pastedText && (pastedText.includes('\n') || pastedText.includes('\t'))) {
                 e.preventDefault();
-                emit('command:clipboard-set', { text: pastedText, paste: true });
+                // Clean the lines first
+                const lines = pastedText.split('\n');
+                const cleanedLines = lines.map(formatLineSpaces);
+                const cleanedText = cleanedLines.join('\n');
+                emit('command:clipboard-set', { text: cleanedText, paste: true });
                 return;
             }
         });
@@ -766,12 +779,20 @@
                     if (cleanText === '\n') {
                         // User pressed Enter. Keydown listener handles this.
                     } else {
-                        // Multiline text block: paste it via clipboard to preserve exact formatting
-                        emit('command:clipboard-set', { text: addedText, paste: true });
+                        // Clean the lines first
+                        const lines = addedText.split('\n');
+                        const cleanedLines = lines.map(formatLineSpaces);
+                        const cleanedText = cleanedLines.join('\n');
+                        emit('command:clipboard-set', { text: cleanedText, paste: true });
                     }
                 } else {
                     if (addedText) {
-                        emit('command:type', { text: addedText });
+                        let text = addedText;
+                        const match = text.match(/^([ \t]+)/);
+                        if (match && match[1].length > 4) {
+                            text = text.replace(/^[ \t]+/, '');
+                        }
+                        if (text) emit('command:type', { text });
                     }
                 }
             } else if (currentLen < lastLength) {
